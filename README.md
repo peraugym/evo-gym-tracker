@@ -2,7 +2,13 @@
 
 Public log of how many members are in **EVO Bruno-Marek-Allee** (Vienna). Each reading comes from the rendered public page [visits.evofitness.at](https://visits.evofitness.at/) — the live sentence “Momentan sind N Mitglieder im Club” (or the English “N people in the club right now”). This is not an official EVO feed. The page’s forecast bars are ignored. A missed slot stays empty; counts are never guessed or backfilled.
 
-Dashboard: [https://peraugym.github.io/evo-gym-tracker/](https://peraugym.github.io/evo-gym-tracker/)
+Dashboard (after the Pages setting below): [https://peraugym.github.io/evo-gym-tracker/](https://peraugym.github.io/evo-gym-tracker/)
+
+## Pages setting
+
+This repo cannot turn GitHub Pages on by itself. In [Settings → Pages](https://github.com/peraugym/evo-gym-tracker/settings/pages), set **Build and deployment → Source** to **GitHub Actions**.
+
+The next run then publishes the site. Until that setting is saved, readings are still committed to `observations.csv` on `main`; only the Pages deploy fails.
 
 ## How a run works
 
@@ -10,6 +16,7 @@ Dashboard: [https://peraugym.github.io/evo-gym-tracker/](https://peraugym.github
 
 - **Schedule:** `0,15,30,45 4-21 * * *` (UTC). That span covers 06:00–22:45 Europe/Vienna in both CET (UTC+1) and CEST (UTC+2). The script checks the actual Vienna time and skips anything outside 06:00–22:45, so the extra UTC runs at the edges do not record a row.
 - **Manual:** Actions → Collect occupancy → Run workflow.
+- Changing `.github/workflows/collect.yml` on `main` also starts one run. Commits the workflow pushes with `GITHUB_TOKEN` do not.
 - Headless Chrome opens the public page, selects Bruno-Marek-Allee in the `location-select` dropdown, and reads `location-now`. The CSV stores the fetch time, not the time the cron was supposed to fire (scheduled runs are often a few minutes late).
 - One row per club per Vienna quarter-hour. A success sticks. A failure can be replaced by one later success in the same slot. A second failure is not written.
 - The row is committed to `observations.csv` on `main`. If the push loses a race, the job rebases onto `main` and applies the same reading again (it will not duplicate a slot). Runs do not overlap (`concurrency` group `evo-occupancy`).

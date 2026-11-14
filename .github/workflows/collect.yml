@@ -76,10 +76,6 @@ jobs:
         if: success() && steps.collect.outputs.deploy == 'true'
         run: python3 build_dashboard.py --out site
 
-      - name: Configure Pages
-        if: success() && steps.collect.outputs.deploy == 'true'
-        uses: actions/configure-pages@v5
-
       - name: Upload Pages artifact
         if: success() && steps.collect.outputs.deploy == 'true'
         uses: actions/upload-pages-artifact@v3
