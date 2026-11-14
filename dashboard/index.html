@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gym Crowd Tracker — Bruno-Marek-Allee</title><link rel="stylesheet" href="style.css"></head>
+<body><header><div><h1>Gym Crowd Tracker</h1><p class="sub">Personal log of observed member counts · EVO Bruno-Marek-Allee · not affiliated with EVO Fitness</p></div>
+<div id="status" class="status">Loading…</div></header>
+<main>
+<section class="controls card">
+ <div class="seg" role="tablist"><button data-r="day" class="on">Day</button><button data-r="week">Week</button><button data-r="month">Month</button><button data-r="all">All</button></div>
+ <label>Date <input type="date" id="date"></label>
+ <span class="hint" id="rangeLabel"></span>
+</section>
+<section class="kpis" id="kpis"></section>
+<section class="card"><h2>Observed counts over time</h2><div id="chart" class="chart"></div>
+<p class="note">Dots are real readings at their actual time (Europe/Vienna). Lines only join neighbouring readings — not continuous measurement, no smoothing, no forecast. Gaps over 25 min are dashed; failed reads are marked ×.</p></section>
+<section class="card"><h2>Day comparison</h2><div id="compare" class="chart"></div><p class="note" id="compareNote"></p></section>
+<section class="card"><h2>Weekday × hour (median of per-date medians)</h2><div id="heat"></div>
+<p class="note">Cells show only hours with data; small number = distinct dates. Quiet slots are listed only with ≥ 3 distinct dates — observed history, not a prediction.</p><div id="quiet"></div></section>
+<section class="card"><h2>Coverage</h2><div id="coverage"></div></section>
+<section class="card"><h2>Observations</h2><a id="dl" href="observations.csv" download>Download CSV</a><div class="tablewrap"><table id="tbl"><thead><tr><th>Time (Vienna)</th><th>Count</th><th>Status</th></tr></thead><tbody></tbody></table></div></section>
+</main><footer>Data refreshes automatically every 60 s; underlying readings are taken about every 15 minutes, 06:00–22:45 Europe/Vienna.</footer>
+<script src="app.js"></script></body></html>

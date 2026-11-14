@@ -1,0 +1,8 @@
+{
+  "name": "evo-occupancy-collector",
+  "private": true,
+  "description": "Headless Chrome reader for the public EVO visits page",
+  "dependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}
