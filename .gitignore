@@ -1,0 +1,10 @@
+node_modules/
+__pycache__/
+*.pyc
+site/
+debug/
+reading.json
+.collect-status.json
+.commit-message.txt
+dashboard/data.json
+dashboard/observations.csv

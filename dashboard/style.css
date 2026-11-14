@@ -1,0 +1,16 @@
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2430;--mut:#6b7380;--acc:#2f6fb3;--line:#e3e6eb;--ok:#2a7a4a;--warn:#b26b00;--bad:#b3261e}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;padding:18px 22px;background:#fff;border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:22px}h2{margin:0 0 10px;font-size:16px}.sub{margin:2px 0 0;color:var(--mut);font-size:13px}
+.status{font-size:13px;padding:6px 10px;border-radius:8px;background:#eef3f9}.status.stale{background:#fff4e0;color:var(--warn)}.status.err{background:#fde8e6;color:var(--bad)}
+main{max-width:1150px;margin:0 auto;padding:16px;display:grid;gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center}.seg button{border:1px solid var(--line);background:#fff;padding:6px 12px;cursor:pointer}
+.seg button:first-child{border-radius:8px 0 0 8px}.seg button:last-child{border-radius:0 8px 8px 0}.seg button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+input[type=date]{padding:5px 8px;border:1px solid var(--line);border-radius:8px;font:inherit}.hint,.note{color:var(--mut);font-size:12.5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.kpi b{display:block;font-size:24px}.kpi span{color:var(--mut);font-size:12.5px}
+.chart svg{width:100%;height:auto;display:block}.chart text{font-size:11px;fill:var(--mut)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}
+.tablewrap{max-height:340px;overflow:auto;margin-top:8px}#heat{overflow-x:auto}.heat td{width:34px;height:30px;text-align:center;font-size:11px;border:1px solid #fff;padding:0}
+.heat td small{display:block;font-size:9px;opacity:.7}.heat th{font-size:11px;color:var(--mut);font-weight:500;padding:2px 4px}
+footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}a{color:var(--acc)}

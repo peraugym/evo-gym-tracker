@@ -1,0 +1,115 @@
+name: Collect occupancy
+
+run-name: Collect occupancy (${{ github.event_name }})
+
+on:
+  schedule:
+    # Every 15 minutes, 04:00–21:45 UTC. Wide enough for 06:00–22:45
+    # Europe/Vienna in both CET (UTC+1) and CEST (UTC+2):
+    #   06:00 Vienna = 05:00 UTC (CET) or 04:00 UTC (CEST)
+    #   22:45 Vienna = 21:45 UTC (CET) or 20:45 UTC (CEST)
+    # collect.py skips any run whose actual Vienna time is outside that window.
+    - cron: "0,15,30,45 4-21 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: evo-occupancy
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      deploy: ${{ steps.collect.outputs.deploy }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates
+          wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y /tmp/chrome.deb
+          if [ ! -x /usr/bin/google-chrome ]; then
+            sudo ln -sf "$(command -v google-chrome-stable)" /usr/bin/google-chrome
+          fi
+          google-chrome --version
+          python3 -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Europe/Vienna'))"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Fetch live count
+        id: collect
+        env:
+          TZ: Europe/Vienna
+          CHROME_PATH: /usr/bin/google-chrome
+          EVO_FAIL_SHOT: debug/fail.png
+          PYTHONUNBUFFERED: "1"
+        run: python3 collect.py --fetch-only
+
+      - name: Commit reading to main
+        run: bash scripts/commit_reading.sh reading.json
+
+      - name: Build dashboard
+        if: success() && steps.collect.outputs.deploy == 'true'
+        run: python3 build_dashboard.py --out site
+
+      - name: Configure Pages
+        if: success() && steps.collect.outputs.deploy == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: success() && steps.collect.outputs.deploy == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Upload failure evidence
+        if: always() && hashFiles('debug/fail.png') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: fetch-failure
+          path: |
+            debug/
+            .collect-status.json
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Occupancy collect"
+            echo
+            echo '```json'
+            cat .collect-status.json 2>/dev/null || echo '{"action":"no status"}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: collect
+    if: success() && needs.collect.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
