@@ -103,6 +103,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
+    # Repository Pages source is GitHub Actions (build_type: workflow).
     needs: collect
     if: success() && needs.collect.outputs.deploy == 'true'
     runs-on: ubuntu-latest

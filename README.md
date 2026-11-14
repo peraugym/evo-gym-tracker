@@ -2,13 +2,9 @@
 
 Public log of how many members are in **EVO Bruno-Marek-Allee** (Vienna). Each reading comes from the rendered public page [visits.evofitness.at](https://visits.evofitness.at/) — the live sentence “Momentan sind N Mitglieder im Club” (or the English “N people in the club right now”). This is not an official EVO feed. The page’s forecast bars are ignored. A missed slot stays empty; counts are never guessed or backfilled.
 
-Dashboard (after the Pages setting below): [https://peraugym.github.io/evo-gym-tracker/](https://peraugym.github.io/evo-gym-tracker/)
+Dashboard: [https://peraugym.github.io/evo-gym-tracker/](https://peraugym.github.io/evo-gym-tracker/)
 
-## Pages setting
-
-This repo cannot turn GitHub Pages on by itself. In [Settings → Pages](https://github.com/peraugym/evo-gym-tracker/settings/pages), set **Build and deployment → Source** to **GitHub Actions**.
-
-The next run then publishes the site. Until that setting is saved, readings are still committed to `observations.csv` on `main`; only the Pages deploy fails.
+Pages is built from this workflow. Source is **GitHub Actions** (`build_type: workflow`).
 
 ## How a run works
 
