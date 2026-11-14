@@ -11,6 +11,13 @@ on:
     # collect.py skips any run whose actual Vienna time is outside that window.
     - cron: "0,15,30,45 4-21 * * *"
   workflow_dispatch:
+  # A push of this workflow file also runs one collection. Used to verify
+  # GitHub-hosted runners. Later commits made with GITHUB_TOKEN do not
+  # start another run, so the CSV push cannot loop.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/collect.yml
 
 permissions:
   contents: write
