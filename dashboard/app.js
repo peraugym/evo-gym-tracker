@@ -75,9 +75,17 @@ function coverage(){const exp=expected(new Date()),E=new Set(exp),ok=new Set(),f
  <p class="note">Schedule: hourly from 7 Nov 10:00 CET, every 15 min from 10:30 CET, 06:00–22:45 Europe/Vienna, daily. Collection has no end date. Missed slots stay empty.</p>
  <table><tr><th>Date</th><th>Expected</th><th>Successful</th><th>Coverage</th></tr>${Object.entries(byDate).reverse().map(([d,v])=>`<tr><td>${d}</td><td>${v.e}</td><td>${v.s}</td><td>${(100*v.s/v.e).toFixed(0)}%</td></tr>`).join("")}</table>`}
 function table(obs){$("#tbl tbody").innerHTML=[...obs].reverse().map(o=>`<tr><td>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})} ${tzLabel(o.d)}</td><td>${o.c??"–"}</td><td>${esc(o.s)}</td></tr>`).join("")}
+function heroBlock(){const el=$("#hero");if(!el)return;const h=D.hero;
+ if(!h||h.count==null){el.className="hero";el.innerHTML='<p class="hero-empty">No readings yet</p>';return}
+ el.className="hero hero-"+h.band;
+ const arrow={up:"↑",down:"↓",flat:"→"}[h.trend]||"";
+ const meaning={up:"higher than the previous reading",down:"lower than the previous reading",flat:"same as the previous reading"}[h.trend]||"";
+ const trend=arrow?`<span class="hero-trend" aria-label="${meaning}">${arrow}</span>`:"";
+ const usual=h.usual&&h.usual.line?`<p class="hero-usual">${esc(h.usual.line)}</p>`:"";
+ el.innerHTML=`<div class="hero-count"><span class="hero-num">${h.count}</span>${trend}</div><p class="hero-time">${esc(h.time_label)}</p>${usual}`}
 function render(){if(!D)return;const obs=D.observations.filter(inRange);
  $("#rangeLabel").textContent={day:"Selected day",week:"Mon–Sun week containing date",month:"Calendar month of date",all:"All observations"}[range];
- status();kpis(obs);chart(obs);compare();heat();coverage();table(obs)}
+ heroBlock();status();kpis(obs);chart(obs);compare();heat();coverage();table(obs)}
 document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".seg button").forEach(x=>x.classList.remove("on"));b.classList.add("on");range=b.dataset.r;render()});
 $("#date").onchange=e=>{sel=e.target.value||sel;render()};
-load();setInterval(load,60000);setInterval(()=>D&&status(),15000);
+load();

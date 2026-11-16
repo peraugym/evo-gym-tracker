@@ -14,3 +14,14 @@ table{border-collapse:collapse;width:100%;font-size:13.5px}td,th{padding:5px 8px
 .tablewrap{max-height:340px;overflow:auto;margin-top:8px}#heat{overflow-x:auto}.heat td{width:34px;height:30px;text-align:center;font-size:11px;border:1px solid #fff;padding:0}
 .heat td small{display:block;font-size:9px;opacity:.7}.heat th{font-size:11px;color:var(--mut);font-weight:500;padding:2px 4px}
 footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}a{color:var(--acc)}
+.hero{padding:28px 16px 22px;text-align:center;background:#fff;border-bottom:1px solid var(--line)}
+.hero-count{display:flex;align-items:flex-start;justify-content:center;gap:6px}
+.hero-num{font-size:clamp(76px,22vw,120px);font-weight:640;line-height:.88;letter-spacing:-.045em}
+.hero-trend{font-size:clamp(28px,7vw,42px);line-height:1;margin-top:.42em}
+.hero-time{margin:10px 0 0;font-size:14px;color:var(--mut)}
+.hero-usual{margin:6px auto 0;max-width:26rem;font-size:13px;line-height:1.35;color:#8b939e}
+.hero-empty{margin:0;color:var(--mut)}
+.hero-green{background:#e7f6ee}.hero-green .hero-num,.hero-green .hero-trend{color:#146c3a}
+.hero-amber{background:#fff6e4}.hero-amber .hero-num,.hero-amber .hero-trend{color:#8a5a00}
+.hero-red{background:#fdeceb}.hero-red .hero-num,.hero-red .hero-trend{color:#a61b16}
+.hero-green .hero-time,.hero-amber .hero-time,.hero-red .hero-time,.hero-green .hero-usual,.hero-amber .hero-usual,.hero-red .hero-usual{color:#6f7784}
