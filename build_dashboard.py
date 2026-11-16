@@ -12,6 +12,8 @@ import tempfile
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+import hero as hero_mod
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.environ.get("EVO_CSV") or os.path.join(HERE, "observations.csv")
 DASH = os.path.join(HERE, "dashboard")
@@ -49,6 +51,16 @@ def load(src: str) -> list[dict]:
     return out
 
 
+def hero_payload(obs: list[dict]) -> dict | None:
+    readings = []
+    for o in obs:
+        if o.get("s") != "ok" or o.get("c") is None:
+            continue
+        when = datetime.fromisoformat(o["vienna"]).astimezone(VIE)
+        readings.append(hero_mod.Reading(when, int(o["c"])))
+    return hero_mod.summarize(readings)
+
+
 def build(now: datetime | None = None, src: str = SRC, site: str | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     site = site or os.path.join(HERE, "site")
@@ -66,6 +78,7 @@ def build(now: datetime | None = None, src: str = SRC, site: str | None = None) 
             "close_hour": 23,
         },
         "source": "Browser readings of the public page visits.evofitness.at (rendered page, not an official EVO feed)",
+        "hero": hero_payload(obs),
         "observations": [{"t": o["t"], "c": o["c"], "s": o["s"]} for o in obs],
     }
     os.makedirs(site, exist_ok=True)

@@ -1,7 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gym Crowd Tracker — Bruno-Marek-Allee</title><link rel="stylesheet" href="style.css"></head>
-<body><header><div><h1>Gym Crowd Tracker</h1><p class="sub">Personal log of observed member counts · EVO Bruno-Marek-Allee · not affiliated with EVO Fitness</p></div>
+<body>
+<section id="hero" class="hero" aria-label="Latest occupancy"></section>
+<header><div><h1>Gym Crowd Tracker</h1><p class="sub">Personal log of observed member counts · EVO Bruno-Marek-Allee · not affiliated with EVO Fitness</p></div>
 <div id="status" class="status">Loading…</div></header>
 <main>
 <section class="controls card">
@@ -17,5 +19,5 @@
 <p class="note">Cells show only hours with data; small number = distinct dates. Quiet slots are listed only with ≥ 3 distinct dates — observed history, not a prediction.</p><div id="quiet"></div></section>
 <section class="card"><h2>Coverage</h2><div id="coverage"></div></section>
 <section class="card"><h2>Observations</h2><a id="dl" href="observations.csv" download>Download CSV</a><div class="tablewrap"><table id="tbl"><thead><tr><th>Time (Vienna)</th><th>Count</th><th>Status</th></tr></thead><tbody></tbody></table></div></section>
-</main><footer>Data refreshes automatically every 60 s; underlying readings are taken about every 15 minutes, 06:00–22:45 Europe/Vienna.</footer>
+</main><footer>Readings are taken about every 15 minutes, 06:00–22:45 Europe/Vienna. This page updates when it is reloaded.</footer>
 <script src="app.js"></script></body></html>
