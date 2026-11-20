@@ -17,7 +17,7 @@ Pages is built from this workflow. Source is **GitHub Actions** (`build_type: wo
 - One row per club per Vienna quarter-hour. A success sticks. A failure can be replaced by one later success in the same slot. A second failure is not written.
 - The row is committed to `observations.csv` on `main`. If the push loses a race, the job rebases onto `main` and applies the same reading again (it will not duplicate a slot). Runs do not overlap (`concurrency` group `evo-occupancy`).
 - When today’s count crosses from 10 or more to under 10, one line is appended to `alerts.log`. The first successful reading of a day never alerts. Failures do not alert and do not reset the baseline. Something outside this repo can read `alerts.log` from `main`.
-- The dashboard is rebuilt from `observations.csv` and deployed to GitHub Pages from this workflow. The page shows today's readings against the typical curve for that weekday (median of past same-weekdays, excluding today). This page updates when it is reloaded.
+- The dashboard is rebuilt from `observations.csv` and deployed to GitHub Pages from this workflow. The day chart shades the usual range (mean ± 2 standard deviations of past days in each 15-minute slot). Same-weekday history is used once that weekday has 3 past days; until then the shade uses every past day. This page updates when it is reloaded.
 
 Collection has no end date.
 
@@ -31,7 +31,7 @@ Collection has no end date.
 | `evo.py` | CSV append, quarter-hour dedupe, and a text coverage summary. |
 | `collect.py` | Window check, fetch, record, alert. |
 | `dashboard/` | Static page (`index.html`, `app.js`, `style.css`). `data.json` is generated at deploy time, including the typical weekday curve. |
-| `typical.py` | Median occupancy curve for each weekday, used by the day-view overlay. |
+| `typical.py` | Mean ± 2 standard deviations for each 15-minute slot, used by the day-view overlay. |
 
 A failed fetch is a row with status `unreadable` or `error` and an empty count.
 

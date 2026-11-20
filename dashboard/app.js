@@ -39,23 +39,38 @@ function typicalOf(ds){return D&&D.typical&&D.typical.weekdays?D.typical.weekday
 function minsOf(slot){const[h,m]=slot.split(":").map(Number);return h*60+m}
 function adjacent(a,b){return minsOf(b)-minsOf(a)===15}
 function typicalNotes(){
- const nowEl=$("#typicalNow"),noteEl=$("#chartNote");
+ const nowEl=$("#typicalNow"),noteEl=$("#chartNote"),legend=$("#typicalLegend"),legendText=$("#typicalLegendText");
  if(noteEl) noteEl.textContent=CHART_NOTE;
  if(nowEl){nowEl.hidden=true;nowEl.textContent=""}
+ if(legend) legend.hidden=true;
  if(range!=="day") return;
- const typ=typicalOf(sel),name=weekdayName(sel);
- if(!typ){if(noteEl) noteEl.textContent=CHART_NOTE+` No typical ${name} curve yet — no past ${name}s in the log.`;return}
- if(noteEl) noteEl.textContent=CHART_NOTE+` The light line is ${typ.label}`+(typ.n_days>=3?", with a shaded 25th–75th percentile band":"")+".";
+ const typ=typicalOf(sel);
+ if(!typ){if(noteEl) noteEl.textContent=CHART_NOTE+" No typical curve yet.";return}
+ const hasBand=typ.slots.some(s=>s.lo!=null&&s.hi!=null);
+ if(noteEl) noteEl.textContent=CHART_NOTE+(hasBand?" The shaded area is the usual range (mean ± 2 standard deviations, not below 0). The thin line is the mean.":" The thin line is the mean.");
+ if(legend&&legendText){legend.hidden=false;legendText.textContent=typ.label}
  if(nowEl&&D.typical&&D.typical.exclude_date===sel&&D.typical.now&&D.typical.now.line){nowEl.hidden=false;nowEl.textContent=D.typical.now.line}
 }
-function typicalLayer(typ,x,y,W,P){
+function typicalRuns(slots){
+ const runs=[]; let cur=[];
+ const flush=()=>{if(cur.length>=2) runs.push(cur); cur=[]};
+ slots.forEach(s=>{if(cur.length&&!adjacent(cur[cur.length-1].slot,s.slot)) flush(); cur.push(s)});
+ flush(); return runs;
+}
+function typicalLayer(typ,x,y){
  if(!typ||!typ.slots||!typ.slots.length) return "";
- let g="",run=[];
- const flush=()=>{if(run.length>=2){const top=run.map(s=>`${x(minsOf(s.slot))} ${y(s.p75)}`).join(" L"),bot=run.slice().reverse().map(s=>`${x(minsOf(s.slot))} ${y(s.p25)}`).join(" L");g+=`<path d="M${top} L${bot} Z" fill="rgba(154,163,173,.22)" stroke="none"/>`}run=[]};
- typ.slots.filter(s=>s.p25!=null&&s.p75!=null).forEach((s,i,arr)=>{if(run.length&&!adjacent(run[run.length-1].slot,s.slot))flush();run.push(s);if(i===arr.length-1)flush()});
- let d="";typ.slots.forEach((s,i)=>{const prev=i?typ.slots[i-1]:null;d+=`${!prev||!adjacent(prev.slot,s.slot)?"M":"L"}${x(minsOf(s.slot))} ${y(s.median)} `});
- if(d) g+=`<path d="${d.trim()}" fill="none" stroke="#8b939e" stroke-width="1.5"/>`;
- g+=`<text x="${W-P.r}" y="14" text-anchor="end">${esc(typ.label)}</text>`;
+ let g="";
+ typicalRuns(typ.slots).forEach(run=>{
+  let band=[];
+  const flushBand=()=>{
+   if(band.length>=2){const top=band.map(s=>`${x(minsOf(s.slot))} ${y(s.hi)}`).join(" L"),bot=band.slice().reverse().map(s=>`${x(minsOf(s.slot))} ${y(s.lo)}`).join(" L");
+    g+=`<path d="M${top} L${bot} Z" fill="rgba(90,112,132,.28)" stroke="none"/>`}
+   band=[]};
+  run.forEach(s=>{if(s.lo==null||s.hi==null){flushBand();return} band.push(s)});
+  flushBand();
+  const d=run.map((s,i)=>`${i?"L":"M"}${x(minsOf(s.slot))} ${y(s.mean)}`).join(" ");
+  g+=`<path d="${d}" fill="none" stroke="#5c6770" stroke-width="1.25"/>`;
+ });
  return g;
 }
 function chart(obs){const el=$("#chart"),W=1000,H=320,P={l:40,r:14,t:18,b:30};
@@ -75,12 +90,12 @@ function chart(obs){const el=$("#chart"),W=1000,H=320,P={l:40,r:14,t:18,b:30};
  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Observed counts">${g}</svg>`}
 function dayChart(el,obs,W,H,P){
  const typ=typicalOf(sel),ok=obs.filter(o=>o.s==="ok"),X0=6*60,X1=22*60+45;
- const typMax=typ?Math.max(0,...typ.slots.map(s=>Math.max(s.median,s.p75==null?-Infinity:s.p75))):0;
+ const typMax=typ?Math.max(0,...typ.slots.map(s=>Math.max(s.mean,s.hi==null?-Infinity:s.hi))):0;
  const ym=Math.max(10,...ok.map(o=>o.c),typMax)*1.15;
  const x=m=>P.l+(m-X0)/(X1-X0)*(W-P.l-P.r),y=v=>H-P.b-v/ym*(H-P.t-P.b);let g="";
  for(let v=0;v<=ym;v+=ym>60?20:ym>30?10:5)g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eee"/><text x="${P.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
  for(let h=6;h<=22;h+=2)g+=`<line x1="${x(h*60)}" x2="${x(h*60)}" y1="${P.t}" y2="${H-P.b}" stroke="#f1f1f1"/><text x="${x(h*60)}" y="${H-10}" text-anchor="middle">${String(h).padStart(2,"0")}:00</text>`;
- g+=typicalLayer(typ,x,y,W,P);
+ g+=typicalLayer(typ,x,y);
  for(let i=1;i<ok.length;i++){const a=ok[i-1],b=ok[i],gap=(b.d-a.d)/6e4;if(gap>6*60)continue;
   g+=`<line x1="${x(a.p.h*60+a.p.m)}" y1="${y(a.c)}" x2="${x(b.p.h*60+b.p.m)}" y2="${y(b.c)}" stroke="#7aa3d4" stroke-width="1.3" ${gap>25?'stroke-dasharray="4 4"':""}/>`}
  ok.forEach(o=>g+=`<circle cx="${x(o.p.h*60+o.p.m)}" cy="${y(o.c)}" r="3.2" fill="#2f6fb3"><title>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}: ${o.c}</title></circle>`);
