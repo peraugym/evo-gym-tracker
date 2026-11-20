@@ -26,4 +26,6 @@ footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}a{color:va
 .hero-red{background:#fdeceb}.hero-red .hero-num,.hero-red .hero-trend{color:#a61b16}
 .hero-green .hero-time,.hero-amber .hero-time,.hero-red .hero-time,.hero-green .hero-usual,.hero-amber .hero-usual,.hero-red .hero-usual{color:#6f7784}
 
-.typical-now{margin:0 0 8px;font-size:13.5px;color:var(--ink)}
+.typical-now{margin:0 0 6px;font-size:13.5px;color:var(--ink)}
+.typical-legend{display:flex;align-items:flex-start;gap:8px;margin:0 0 8px;color:var(--mut);font-size:13px;line-height:1.35}
+.typical-legend .swatch{width:28px;height:14px;margin-top:2px;flex:none;border-radius:3px;background:rgba(90,112,132,.30);box-shadow:inset 0 6px 0 #5c6770}
