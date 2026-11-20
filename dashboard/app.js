@@ -31,8 +31,37 @@ function kpis(obs){const ok=obs.filter(o=>o.s==="ok"),fails=obs.length-ok.length
  const at=v=>ok.filter(o=>o.c===v).slice(0,3).map(o=>fmt(o.d,range==="day"?{hour:"2-digit",minute:"2-digit"}:{weekday:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})).join(", ")+(ok.filter(o=>o.c===v).length>3?"…":"");
  el.innerHTML=[[mn,"Min · "+at(mn)],[mx,"Max · "+at(mx)],[avg.toFixed(1),"Average of readings"],[median(c),"Median"],[ok.length,"Readings"+(fails?` · ${fails} failed`:"")],[new Set(ok.map(o=>o.p.date)).size,"Distinct dates"]]
  .map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${esc(l)}</span></div>`).join("")}
-function chart(obs){const el=$("#chart"),W=1000,H=320,P={l:40,r:14,t:12,b:30};
+
+const WEEKDAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const CHART_NOTE="Dots are real readings at their actual time (Europe/Vienna). Lines only join neighbouring readings — not continuous measurement, no smoothing, no forecast. Gaps over 25 min are dashed; failed reads are marked ×.";
+function weekdayName(ds){return WEEKDAYS[new Date(ds+"T12:00:00Z").getUTCDay()]}
+function typicalOf(ds){return D&&D.typical&&D.typical.weekdays?D.typical.weekdays[weekdayName(ds)]||null:null}
+function minsOf(slot){const[h,m]=slot.split(":").map(Number);return h*60+m}
+function adjacent(a,b){return minsOf(b)-minsOf(a)===15}
+function typicalNotes(){
+ const nowEl=$("#typicalNow"),noteEl=$("#chartNote");
+ if(noteEl) noteEl.textContent=CHART_NOTE;
+ if(nowEl){nowEl.hidden=true;nowEl.textContent=""}
+ if(range!=="day") return;
+ const typ=typicalOf(sel),name=weekdayName(sel);
+ if(!typ){if(noteEl) noteEl.textContent=CHART_NOTE+` No typical ${name} curve yet — no past ${name}s in the log.`;return}
+ if(noteEl) noteEl.textContent=CHART_NOTE+` The light line is ${typ.label}`+(typ.n_days>=3?", with a shaded 25th–75th percentile band":"")+".";
+ if(nowEl&&D.typical&&D.typical.exclude_date===sel&&D.typical.now&&D.typical.now.line){nowEl.hidden=false;nowEl.textContent=D.typical.now.line}
+}
+function typicalLayer(typ,x,y,W,P){
+ if(!typ||!typ.slots||!typ.slots.length) return "";
+ let g="",run=[];
+ const flush=()=>{if(run.length>=2){const top=run.map(s=>`${x(minsOf(s.slot))} ${y(s.p75)}`).join(" L"),bot=run.slice().reverse().map(s=>`${x(minsOf(s.slot))} ${y(s.p25)}`).join(" L");g+=`<path d="M${top} L${bot} Z" fill="rgba(154,163,173,.22)" stroke="none"/>`}run=[]};
+ typ.slots.filter(s=>s.p25!=null&&s.p75!=null).forEach((s,i,arr)=>{if(run.length&&!adjacent(run[run.length-1].slot,s.slot))flush();run.push(s);if(i===arr.length-1)flush()});
+ let d="";typ.slots.forEach((s,i)=>{const prev=i?typ.slots[i-1]:null;d+=`${!prev||!adjacent(prev.slot,s.slot)?"M":"L"}${x(minsOf(s.slot))} ${y(s.median)} `});
+ if(d) g+=`<path d="${d.trim()}" fill="none" stroke="#8b939e" stroke-width="1.5"/>`;
+ g+=`<text x="${W-P.r}" y="14" text-anchor="end">${esc(typ.label)}</text>`;
+ return g;
+}
+function chart(obs){const el=$("#chart"),W=1000,H=320,P={l:40,r:14,t:18,b:30};
+ typicalNotes();
  if(!obs.length){el.innerHTML='<p class="note">No readings in this range.</p>';return}
+ if(range==="day"){dayChart(el,obs,W,H,P);return}
  const ok=obs.filter(o=>o.s==="ok"),t0=+obs[0].d,t1=Math.max(+obs[obs.length-1].d,t0+36e5),ym=Math.max(10,...ok.map(o=>o.c))*1.15;
  const x=t=>P.l+(t-t0)/(t1-t0)*(W-P.l-P.r),y=v=>H-P.b-v/ym*(H-P.t-P.b);let g="";
  for(let v=0;v<=ym;v+=ym>60?20:ym>30?10:5)g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eee"/><text x="${P.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
@@ -44,6 +73,19 @@ function chart(obs){const el=$("#chart"),W=1000,H=320,P={l:40,r:14,t:12,b:30};
  ok.forEach(o=>g+=`<circle cx="${x(+o.d)}" cy="${y(o.c)}" r="${ok.length>300?1.8:3.2}" fill="#2f6fb3"><title>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}: ${o.c}</title></circle>`);
  obs.filter(o=>o.s!=="ok").forEach(o=>g+=`<text x="${x(+o.d)}" y="${H-P.b-4}" text-anchor="middle" fill="#b3261e" style="fill:#b3261e">×<title>${esc(o.s)} ${fmt(o.d,{hour:"2-digit",minute:"2-digit"})}</title></text>`);
  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Observed counts">${g}</svg>`}
+function dayChart(el,obs,W,H,P){
+ const typ=typicalOf(sel),ok=obs.filter(o=>o.s==="ok"),X0=6*60,X1=22*60+45;
+ const typMax=typ?Math.max(0,...typ.slots.map(s=>Math.max(s.median,s.p75==null?-Infinity:s.p75))):0;
+ const ym=Math.max(10,...ok.map(o=>o.c),typMax)*1.15;
+ const x=m=>P.l+(m-X0)/(X1-X0)*(W-P.l-P.r),y=v=>H-P.b-v/ym*(H-P.t-P.b);let g="";
+ for(let v=0;v<=ym;v+=ym>60?20:ym>30?10:5)g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eee"/><text x="${P.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+ for(let h=6;h<=22;h+=2)g+=`<line x1="${x(h*60)}" x2="${x(h*60)}" y1="${P.t}" y2="${H-P.b}" stroke="#f1f1f1"/><text x="${x(h*60)}" y="${H-10}" text-anchor="middle">${String(h).padStart(2,"0")}:00</text>`;
+ g+=typicalLayer(typ,x,y,W,P);
+ for(let i=1;i<ok.length;i++){const a=ok[i-1],b=ok[i],gap=(b.d-a.d)/6e4;if(gap>6*60)continue;
+  g+=`<line x1="${x(a.p.h*60+a.p.m)}" y1="${y(a.c)}" x2="${x(b.p.h*60+b.p.m)}" y2="${y(b.c)}" stroke="#7aa3d4" stroke-width="1.3" ${gap>25?'stroke-dasharray="4 4"':""}/>`}
+ ok.forEach(o=>g+=`<circle cx="${x(o.p.h*60+o.p.m)}" cy="${y(o.c)}" r="3.2" fill="#2f6fb3"><title>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}: ${o.c}</title></circle>`);
+ obs.filter(o=>o.s!=="ok").forEach(o=>g+=`<text x="${x(o.p.h*60+o.p.m)}" y="${H-P.b-4}" text-anchor="middle" fill="#b3261e" style="fill:#b3261e">×<title>${esc(o.s)} ${fmt(o.d,{hour:"2-digit",minute:"2-digit"})}</title></text>`);
+ el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Observed counts with typical weekday overlay">${g}</svg>`}
 function compare(){const el=$("#compare"),ok=D.observations.filter(o=>o.s==="ok"),dates=[...new Set(ok.map(o=>o.p.date))].filter(d=>d<=sel).slice(-7);
  if(dates.length<2){el.innerHTML="";$("#compareNote").textContent="Needs readings from at least two dates.";return}
  const W=1000,H=280,P={l:40,r:110,t:10,b:28},ym=Math.max(10,...ok.map(o=>o.c))*1.15,x=m=>P.l+(m-360)/(1380-360)*(W-P.l-P.r),y=v=>H-P.b-v/ym*(H-P.t-P.b);
