@@ -25,3 +25,5 @@ footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}a{color:va
 .hero-amber{background:#fff6e4}.hero-amber .hero-num,.hero-amber .hero-trend{color:#8a5a00}
 .hero-red{background:#fdeceb}.hero-red .hero-num,.hero-red .hero-trend{color:#a61b16}
 .hero-green .hero-time,.hero-amber .hero-time,.hero-red .hero-time,.hero-green .hero-usual,.hero-amber .hero-usual,.hero-red .hero-usual{color:#6f7784}
+
+.typical-now{margin:0 0 8px;font-size:13.5px;color:var(--ink)}

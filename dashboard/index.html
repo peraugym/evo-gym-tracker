@@ -12,8 +12,10 @@
  <span class="hint" id="rangeLabel"></span>
 </section>
 <section class="kpis" id="kpis"></section>
-<section class="card"><h2>Observed counts over time</h2><div id="chart" class="chart"></div>
-<p class="note">Dots are real readings at their actual time (Europe/Vienna). Lines only join neighbouring readings — not continuous measurement, no smoothing, no forecast. Gaps over 25 min are dashed; failed reads are marked ×.</p></section>
+<section class="card"><h2>Observed counts over time</h2>
+<p class="typical-now" id="typicalNow" hidden></p>
+<div id="chart" class="chart"></div>
+<p class="note" id="chartNote">Dots are real readings at their actual time (Europe/Vienna). Lines only join neighbouring readings — not continuous measurement, no smoothing, no forecast. Gaps over 25 min are dashed; failed reads are marked ×.</p></section>
 <section class="card"><h2>Day comparison</h2><div id="compare" class="chart"></div><p class="note" id="compareNote"></p></section>
 <section class="card"><h2>Weekday × hour (median of per-date medians)</h2><div id="heat"></div>
 <p class="note">Cells show only hours with data; small number = distinct dates. Quiet slots are listed only with ≥ 3 distinct dates — observed history, not a prediction.</p><div id="quiet"></div></section>
