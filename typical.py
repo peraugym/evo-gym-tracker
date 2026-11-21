@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import hero
@@ -29,6 +29,8 @@ BAND_SD = 2
 WEEKDAY_MIN_DAYS = 3
 # Missing quarter-hours that may be bridged. 2 slots = up to 30 minutes.
 MAX_GAP_SLOTS = 2
+# Quietest stretch: six consecutive slots, 90 minutes.
+WINDOW_SLOTS = 6
 
 WEEKDAY_NAMES = (
     "Monday",
@@ -302,4 +304,177 @@ def payload(readings: list[hero.Reading], today: date) -> dict:
         "exclude_date": today.isoformat(),
         "weekdays": weekdays,
         "now": now,
+    }
+
+
+def _hhmm_minutes(label: str) -> int:
+    hour, minute = label.split(":")
+    return int(hour) * 60 + int(minute)
+
+
+def _end_label(start: time) -> str:
+    total = start.hour * 60 + start.minute + WINDOW_SLOTS * SLOT_MINUTES
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def basis_phrase(curve: dict) -> str:
+    """Lower-case 'based on …' clause naming the curve and how many days it uses."""
+    n = int(curve.get("n_days") or 0)
+    unit = "day" if n == 1 else "days"
+    if curve.get("source") == "weekday":
+        who = WEEKDAY_PLURAL[WEEKDAY_NAMES.index(curve["weekday"])]
+    else:
+        who = "all days"
+    return f"based on {who}, {n} {unit}"
+
+
+def candidate_windows(slots: list[dict]) -> list[dict]:
+    """Every 90-minute run of 6 present slots, quietest mean first."""
+    by_label = {row["slot"]: row["mean"] for row in slots}
+    times = slot_times()
+    found = []
+    for i in range(len(times) - WINDOW_SLOTS + 1):
+        chunk = times[i:i + WINDOW_SLOTS]
+        means = []
+        missing = False
+        for moment in chunk:
+            key = slot_label(moment)
+            if key not in by_label:
+                missing = True
+                break
+            means.append(by_label[key])
+        if missing:
+            continue
+        mean = float(statistics.mean(means))
+        found.append({
+            "start": slot_label(chunk[0]),
+            "end": _end_label(chunk[0]),
+            "mean": mean,
+            "shown": hero.round_half_up(mean),
+        })
+    found.sort(key=lambda item: (item["mean"], item["start"]))
+    return found
+
+
+def windows_overlap(left: dict, right: dict) -> bool:
+    return abs(_hhmm_minutes(left["start"]) - _hhmm_minutes(right["start"])) < WINDOW_SLOTS * SLOT_MINUTES
+
+
+def slots_left(local: datetime) -> int:
+    """Collected slots still starting at or after the current Vienna quarter-hour."""
+    local = local.astimezone(VIE) if local.tzinfo else local.replace(tzinfo=VIE)
+    minutes = local.hour * 60 + local.minute
+    open_m = OPEN.hour * 60 + OPEN.minute
+    close_m = CLOSE_SLOT.hour * 60 + CLOSE_SLOT.minute
+    start = open_m if minutes < open_m else minutes - (minutes % SLOT_MINUTES)
+    if start > close_m:
+        return 0
+    return (close_m - start) // SLOT_MINUTES + 1
+
+
+def earliest_start(local: datetime) -> str | None:
+    """First slot that is not already past. None when fewer than 6 slots remain."""
+    if slots_left(local) < WINDOW_SLOTS:
+        return None
+    local = local.astimezone(VIE) if local.tzinfo else local.replace(tzinfo=VIE)
+    minutes = local.hour * 60 + local.minute
+    open_m = OPEN.hour * 60 + OPEN.minute
+    start = open_m if minutes < open_m else minutes - (minutes % SLOT_MINUTES)
+    return f"{start // 60:02d}:{start % 60:02d}"
+
+
+def window_sentence(prefix: str, window: dict, basis: str | None = None) -> str:
+    detail = f"typically ~{window['shown']} people"
+    if basis:
+        detail += f" ({basis})"
+    return f"{prefix}: {window['start']}–{window['end']}, {detail}"
+
+
+def pick_pair(windows: list[dict], earliest: str) -> tuple[dict | None, dict | None]:
+    eligible = [item for item in windows if item["start"] >= earliest]
+    if not eligible:
+        return None, None
+    best = eligible[0]
+    runner = next((item for item in eligible[1:] if not windows_overlap(best, item)), None)
+    return best, runner
+
+
+def best_time_catalog(curves: dict[str, dict]) -> dict[str, dict]:
+    catalog = {}
+    for name, curve in curves.items():
+        catalog[name] = {
+            "source": curve.get("source"),
+            "n_days": curve.get("n_days"),
+            "basis": basis_phrase(curve),
+            "windows": candidate_windows(curve.get("slots") or []),
+        }
+    return catalog
+
+
+def _tomorrow_pick(catalog: dict, tomorrow: date) -> dict | None:
+    info = catalog.get(WEEKDAY_NAMES[tomorrow.weekday()])
+    if not info or not info["windows"]:
+        return None
+    best = info["windows"][0]
+    return {
+        "start": best["start"],
+        "end": best["end"],
+        "shown": best["shown"],
+        "line": window_sentence("Tomorrow's quietest window", best, info["basis"]),
+        "confidence": info["basis"][:1].upper() + info["basis"][1:],
+    }
+
+
+def recommend(catalog: dict, now: datetime) -> dict:
+    """Quietest 90-minute window still ahead, using pre-ranked curves."""
+    local = now.astimezone(VIE) if now.tzinfo else now.replace(tzinfo=VIE)
+    today = local.date()
+    tomorrow = today + timedelta(days=1)
+    if not catalog:
+        return {"status": "none", "message": "No typical data yet"}
+    earliest = earliest_start(local)
+    today_info = catalog.get(WEEKDAY_NAMES[today.weekday()])
+    if earliest is None:
+        result = {"status": "evening", "message": "Not enough time left today"}
+        nxt = _tomorrow_pick(catalog, tomorrow)
+        if nxt:
+            result["tomorrow"] = nxt
+        return result
+    if not today_info or not today_info["windows"]:
+        return {"status": "none", "message": "No typical data yet"}
+    best, runner = pick_pair(today_info["windows"], earliest)
+    if best is None:
+        result = {"status": "none", "message": "No typical data for the rest of today"}
+        nxt = _tomorrow_pick(catalog, tomorrow)
+        if nxt:
+            result["tomorrow"] = nxt
+        return result
+    result = {
+        "status": "today",
+        "start": best["start"],
+        "end": best["end"],
+        "shown": best["shown"],
+        "mean": best["mean"],
+        "line": window_sentence("Quietest window left today", best, today_info["basis"]),
+        "confidence": today_info["basis"][:1].upper() + today_info["basis"][1:],
+        "source": today_info["source"],
+        "n_days": today_info["n_days"],
+    }
+    if runner:
+        result["runner_up"] = {
+            "start": runner["start"],
+            "end": runner["end"],
+            "shown": runner["shown"],
+            "line": window_sentence("Runner-up", runner, None),
+        }
+    return result
+
+
+def best_time(curves: dict[str, dict], now: datetime) -> dict:
+    catalog = best_time_catalog(curves)
+    local = now.astimezone(VIE) if now.tzinfo else now.replace(tzinfo=VIE)
+    return {
+        "window_slots": WINDOW_SLOTS,
+        "by_weekday": catalog,
+        "at_build": recommend(catalog, local),
     }

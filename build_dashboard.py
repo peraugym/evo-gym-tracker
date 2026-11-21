@@ -70,6 +70,12 @@ def typical_payload(obs: list[dict], now: datetime) -> dict:
     return typical_mod.payload(ok_readings(obs), now.astimezone(VIE).date())
 
 
+def best_time_payload(obs: list[dict], now: datetime) -> dict:
+    local = now.astimezone(VIE)
+    curves = typical_mod.display_curves(ok_readings(obs), local.date())
+    return typical_mod.best_time(curves, local)
+
+
 def build(now: datetime | None = None, src: str = SRC, site: str | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     site = site or os.path.join(HERE, "site")
@@ -89,6 +95,7 @@ def build(now: datetime | None = None, src: str = SRC, site: str | None = None) 
         "source": "Browser readings of the public page visits.evofitness.at (rendered page, not an official EVO feed)",
         "hero": hero_payload(obs),
         "typical": typical_payload(obs, now),
+        "best_time": best_time_payload(obs, now),
         "observations": [{"t": o["t"], "c": o["c"], "s": o["s"]} for o in obs],
     }
     os.makedirs(site, exist_ok=True)

@@ -158,9 +158,10 @@ class BuildWire(unittest.TestCase):
         self.assertIn(data["hero"]["band"], ("green", "amber", "red"))
         self.assertIn(data["hero"]["trend"], ("up", "down", "flat", None))
         self.assertNotIn("note", data["observations"][0])
-        # Static page: the script does not poll.
+        # Observations are not polled. The best-time box only rechecks the clock.
         script = open("dashboard/app.js").read()
-        self.assertNotIn("setInterval", script)
+        self.assertNotIn("setInterval(load", script)
+        self.assertIn("bestTimeBox()", script)
         page = open("dashboard/index.html").read()
         self.assertLess(page.index('id="hero"'), page.index("<header"))
 

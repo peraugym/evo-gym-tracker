@@ -132,6 +132,26 @@ function coverage(){const exp=expected(new Date()),E=new Set(exp),ok=new Set(),f
  <p class="note">Schedule: hourly from 7 Nov 10:00 CET, every 15 min from 10:30 CET, 06:00–22:45 Europe/Vienna, daily. Collection has no end date. Missed slots stay empty.</p>
  <table><tr><th>Date</th><th>Expected</th><th>Successful</th><th>Coverage</th></tr>${Object.entries(byDate).reverse().map(([d,v])=>`<tr><td>${d}</td><td>${v.e}</td><td>${v.s}</td><td>${(100*v.s/v.e).toFixed(0)}%</td></tr>`).join("")}</table>`}
 function table(obs){$("#tbl tbody").innerHTML=[...obs].reverse().map(o=>`<tr><td>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})} ${tzLabel(o.d)}</td><td>${o.c??"–"}</td><td>${esc(o.s)}</td></tr>`).join("")}
+const FULL=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+function hhmmMins(s){const [h,m]=s.split(":").map(Number);return h*60+m}
+function slotsLeftNow(h,m){const minutes=h*60+m,open=6*60,close=22*60+45,start=minutes<open?open:minutes-(minutes%15);return start>close?0:Math.floor((close-start)/15)+1}
+function earliestNow(h,m){if(slotsLeftNow(h,m)<6)return null;const minutes=h*60+m,open=6*60,start=minutes<open?open:minutes-(minutes%15);return String(Math.floor(start/60)).padStart(2,"0")+":"+String(start%60).padStart(2,"0")}
+function windowsOverlap(a,b){return Math.abs(hhmmMins(a.start)-hhmmMins(b.start))<90}
+function bestSentence(prefix,w,basis){return prefix+": "+w.start+"–"+w.end+", typically ~"+w.shown+" people"+(basis?" ("+basis+")":"")}
+function bestTimeBox(){const el=$("#bestTime");if(!el)return;
+ if(!D||!D.best_time||!D.best_time.by_weekday){el.innerHTML="";return}
+ const p=parts(new Date()),cat=D.best_time.by_weekday,today=FULL[p.wd],tomorrow=FULL[(p.wd+1)%7];
+ const todayInfo=cat[today],tomInfo=cat[tomorrow];
+ const tom=()=>{if(!tomInfo||!tomInfo.windows||!tomInfo.windows.length)return null;const w=tomInfo.windows[0];return {line:bestSentence("Tomorrow's quietest window",w,tomInfo.basis),confidence:tomInfo.basis.charAt(0).toUpperCase()+tomInfo.basis.slice(1)}};
+ const earliest=earliestNow(p.h,p.m);
+ if(!Object.keys(cat).length){el.innerHTML='<p class="fallback">No typical data yet</p>';return}
+ if(earliest==null){const nxt=tom();el.innerHTML=`<h2>Best time today</h2><p class="fallback">Not enough time left today</p>`+(nxt?`<p class="detail">${esc(nxt.line)}</p><p class="note">${esc(nxt.confidence)}</p>`:"");return}
+ if(!todayInfo||!todayInfo.windows||!todayInfo.windows.length){el.innerHTML='<p class="fallback">No typical data yet</p>';return}
+ const eligible=todayInfo.windows.filter(w=>w.start>=earliest);
+ if(!eligible.length){const nxt=tom();el.innerHTML='<p class="fallback">No typical data for the rest of today</p>'+(nxt?`<p class="detail">${esc(nxt.line)}</p><p class="note">${esc(nxt.confidence)}</p>`:"");return}
+ const best=eligible[0],runner=eligible.slice(1).find(w=>!windowsOverlap(best,w));
+ const conf=todayInfo.basis.charAt(0).toUpperCase()+todayInfo.basis.slice(1);
+ el.innerHTML=`<h2>Best time today</h2><p class="when">${esc(best.start)}–${esc(best.end)}</p><p class="detail">Quietest window left today, typically ~${best.shown} people</p><p class="note">${esc(conf)}</p>`+(runner?`<p class="runner">${esc(bestSentence("Runner-up",runner,null))}</p>`:"")}
 function heroBlock(){const el=$("#hero");if(!el)return;const h=D.hero;
  if(!h||h.count==null){el.className="hero";el.innerHTML='<p class="hero-empty">No readings yet</p>';return}
  el.className="hero hero-"+h.band;
@@ -142,7 +162,7 @@ function heroBlock(){const el=$("#hero");if(!el)return;const h=D.hero;
  el.innerHTML=`<div class="hero-count"><span class="hero-num">${h.count}</span>${trend}</div><p class="hero-time">${esc(h.time_label)}</p>${usual}`}
 function render(){if(!D)return;const obs=D.observations.filter(inRange);
  $("#rangeLabel").textContent={day:"Selected day",week:"Mon–Sun week containing date",month:"Calendar month of date",all:"All observations"}[range];
- heroBlock();status();kpis(obs);chart(obs);compare();heat();coverage();table(obs)}
+ heroBlock();bestTimeBox();status();kpis(obs);chart(obs);compare();heat();coverage();table(obs)}
 document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".seg button").forEach(x=>x.classList.remove("on"));b.classList.add("on");range=b.dataset.r;render()});
 $("#date").onchange=e=>{sel=e.target.value||sel;render()};
-load();
+load();setInterval(()=>D&&bestTimeBox(),60000);

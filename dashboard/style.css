@@ -25,6 +25,12 @@ footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}a{color:va
 .hero-amber{background:#fff6e4}.hero-amber .hero-num,.hero-amber .hero-trend{color:#8a5a00}
 .hero-red{background:#fdeceb}.hero-red .hero-num,.hero-red .hero-trend{color:#a61b16}
 .hero-green .hero-time,.hero-amber .hero-time,.hero-red .hero-time,.hero-green .hero-usual,.hero-amber .hero-usual,.hero-red .hero-usual{color:#6f7784}
+.best-time{padding:14px 18px 16px;background:#fff;border-bottom:1px solid var(--line)}
+.best-time h2{margin:0;font-size:12px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.best-time .when{margin:2px 0 0;font-size:clamp(22px,5.2vw,30px);font-weight:650;letter-spacing:-.03em;line-height:1.15}
+.best-time .detail,.best-time .runner,.best-time .fallback{margin:4px 0 0;font-size:14.5px;line-height:1.35}
+.best-time .note{margin:4px 0 0;color:var(--mut);font-size:12.5px}
+.best-time .runner{color:#3c4553}
 
 .typical-now{margin:0 0 6px;font-size:13.5px;color:var(--ink)}
 .typical-legend{display:flex;align-items:flex-start;gap:8px;margin:0 0 8px;color:var(--mut);font-size:13px;line-height:1.35}
