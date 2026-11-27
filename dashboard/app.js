@@ -89,8 +89,8 @@ function typicalLayer(typ,x,y,latestMin){
   g+=`<path d="${d}" fill="none" stroke="#6b7380" stroke-width="1.6" stroke-dasharray="6 5"/>`;
   if(latestMin!=null){
    const after=run.filter(s=>minsOf(s.slot)>latestMin);
-   if(after.length){const s=after[Math.min(1,after.length-1)];
-    g+=`<text x="${x(minsOf(s.slot))+4}" y="${y(s.median)-8}" fill="#6b7380">Historical pattern</text>`}
+   if(after.length){const s=after[Math.min(1,after.length-1)],roof=s.hi==null?s.median:s.hi;
+    g+=`<text class="pattern-label" x="${x(minsOf(s.slot))+6}" y="${y(roof)-8}">Historical pattern</text>`}
   }
  });
  return g;
@@ -131,7 +131,7 @@ function dayChart(el,obs,W,H){
   const mx=latestMin,hh=fmt(latest.d,{hour:"2-digit",minute:"2-digit"});
   g+=`<line x1="${x(mx)}" x2="${x(mx)}" y1="${P.t}" y2="${H-P.b}" stroke="#2f6fb3" stroke-dasharray="2 3" stroke-width="1.2"/>`;
   g+=`<text x="${x(mx)}" y="${P.t-6}" text-anchor="middle" fill="#2f6fb3">Latest · ${hh}</text>`;
-  g+=`<g><rect x="${x(mx)+6}" y="${y(latest.c)-16}" width="28" height="18" rx="4" fill="#2f6fb3"/><text x="${x(mx)+20}" y="${y(latest.c)-3}" text-anchor="middle" fill="#fff">${latest.c}</text></g>`;
+  g+=`<g><rect x="${x(mx)+6}" y="${y(latest.c)-16}" width="30" height="18" rx="4" fill="#2f6fb3"/><text class="bubble-num" x="${x(mx)+21}" y="${y(latest.c)-3}" text-anchor="middle">${latest.c}</text></g>`;
  }
  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Today versus the usual pattern">${g}</svg>`}
 function compare(){const el=$("#compare"),ok=D.observations.filter(o=>o.s==="ok"),dates=[...new Set(ok.map(o=>o.p.date))].filter(d=>d<=sel).slice(-7);
