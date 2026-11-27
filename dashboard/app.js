@@ -74,7 +74,7 @@ function typicalRuns(slots){
  slots.forEach(s=>{if(cur.length&&!adjacent(cur[cur.length-1].slot,s.slot)) flush(); cur.push(s)});
  flush(); return runs;
 }
-function typicalLayer(typ,x,y,latestMin){
+function typicalLayer(typ,x,y){
  if(!typ||!typ.slots||!typ.slots.length) return "";
  let g="";
  typicalRuns(typ.slots).forEach(run=>{
@@ -87,11 +87,6 @@ function typicalLayer(typ,x,y,latestMin){
   flushBand();
   const d=run.map((s,i)=>`${i?"L":"M"}${x(minsOf(s.slot))} ${y(s.median)}`).join(" ");
   g+=`<path d="${d}" fill="none" stroke="#6b7380" stroke-width="1.6" stroke-dasharray="6 5"/>`;
-  if(latestMin!=null){
-   const after=run.filter(s=>minsOf(s.slot)>latestMin);
-   if(after.length){const s=after[Math.min(1,after.length-1)],roof=s.hi==null?s.median:s.hi;
-    g+=`<text class="pattern-label" x="${x(minsOf(s.slot))+6}" y="${y(roof)-8}">Historical pattern</text>`}
-  }
  });
  return g;
 }
@@ -122,7 +117,7 @@ function dayChart(el,obs,W,H){
  const latest=ok.length?ok[ok.length-1]:null;
  const latestMin=latest?latest.p.h*60+latest.p.m:null;
  const isToday=sel===parts(new Date()).date;
- g+=typicalLayer(typ,x,y,isToday?latestMin:null);
+ g+=typicalLayer(typ,x,y);
  for(let i=1;i<ok.length;i++){const a=ok[i-1],b=ok[i],gap=(b.d-a.d)/6e4;if(gap>6*60)continue;
   g+=`<line x1="${x(a.p.h*60+a.p.m)}" y1="${y(a.c)}" x2="${x(b.p.h*60+b.p.m)}" y2="${y(b.c)}" stroke="#2f6fb3" stroke-width="2" ${gap>25?'stroke-dasharray="4 4"':""}/>`}
  ok.forEach(o=>g+=`<circle cx="${x(o.p.h*60+o.p.m)}" cy="${y(o.c)}" r="3.4" fill="#2f6fb3"><title>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}: ${o.c}</title></circle>`);

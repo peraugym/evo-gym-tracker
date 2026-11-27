@@ -11,7 +11,6 @@ input[type=date]{padding:5px 8px;border:1px solid var(--line);border-radius:8px;
 .kpi b{display:block;font-size:24px}.kpi span{color:var(--mut);font-size:12.5px}
 .chart svg{width:100%;height:auto;display:block}.chart text{font-size:11px;fill:var(--mut)}
 .chart text.bubble-num{fill:#fff;font-weight:700}
-.chart text.pattern-label{fill:#1d2430;font-weight:650;paint-order:stroke;stroke:#fff;stroke-width:3px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}
 .tablewrap{max-height:340px;overflow:auto;margin-top:8px}#heat{overflow-x:auto}.heat td{width:34px;height:30px;text-align:center;font-size:11px;border:1px solid #fff;padding:0}
 .heat td small{display:block;font-size:9px;opacity:.7}.heat th{font-size:11px;color:var(--mut);font-weight:500;padding:2px 4px}
