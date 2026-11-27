@@ -13,11 +13,20 @@
  <span class="hint" id="rangeLabel"></span>
 </section>
 <section class="kpis" id="kpis"></section>
-<section class="card"><h2>Observed counts over time</h2>
-<p class="typical-now" id="typicalNow" hidden></p>
-<p class="typical-legend" id="typicalLegend" hidden><span class="swatch" aria-hidden="true"></span><span id="typicalLegendText"></span></p>
+<section class="card" id="todayCard"><h2 id="chartTitle">Today vs usual</h2>
+<div class="vs-bar" id="vsBar">
+ <span class="pill" id="vsPill" hidden></span>
+ <span class="vs-meta" id="vsMeta"></span>
+</div>
+<ul class="vs-legend" id="vsLegend">
+ <li><span class="key today"></span>Today</li>
+ <li><span class="key median"></span>Historical median</li>
+ <li><span class="key band"></span>Middle 50%</li>
+</ul>
 <div id="chart" class="chart"></div>
-<p class="note" id="chartNote">Dots are real readings at their actual time (Europe/Vienna). Lines only join neighbouring readings — not continuous measurement, no smoothing, no forecast. Gaps over 25 min are dashed; failed reads are marked ×.</p></section>
+<p class="note" id="chartNote"></p>
+<p class="vs-foot" id="vsFoot"></p>
+</section>
 <section class="card"><h2>Day comparison</h2><div id="compare" class="chart"></div><p class="note" id="compareNote"></p></section>
 <section class="card"><h2>Weekday × hour (median of per-date medians)</h2><div id="heat"></div>
 <p class="note">Cells show only hours with data; small number = distinct dates. Quiet slots are listed only with ≥ 3 distinct dates — observed history, not a prediction.</p><div id="quiet"></div></section>

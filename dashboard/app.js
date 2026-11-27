@@ -38,45 +38,67 @@ function weekdayName(ds){return WEEKDAYS[new Date(ds+"T12:00:00Z").getUTCDay()]}
 function typicalOf(ds){return D&&D.typical&&D.typical.weekdays?D.typical.weekdays[weekdayName(ds)]||null:null}
 function minsOf(slot){const[h,m]=slot.split(":").map(Number);return h*60+m}
 function adjacent(a,b){return minsOf(b)-minsOf(a)===15}
-function typicalNotes(){
- const nowEl=$("#typicalNow"),noteEl=$("#chartNote"),legend=$("#typicalLegend"),legendText=$("#typicalLegendText");
- if(noteEl) noteEl.textContent=CHART_NOTE;
- if(nowEl){nowEl.hidden=true;nowEl.textContent=""}
- if(legend) legend.hidden=true;
- if(range!=="day") return;
- const typ=typicalOf(sel);
- if(!typ){if(noteEl) noteEl.textContent=CHART_NOTE+" No typical curve yet.";return}
- const hasBand=typ.slots.some(s=>s.lo!=null&&s.hi!=null);
- if(noteEl) noteEl.textContent=CHART_NOTE+(hasBand?" The shaded area is the usual range (mean ± 2 standard deviations, not below 0). The thin line is the mean.":" The thin line is the mean.");
- if(legend&&legendText){legend.hidden=false;legendText.textContent=typ.label}
- if(nowEl&&D.typical&&D.typical.exclude_date===sel&&D.typical.now&&D.typical.now.line){nowEl.hidden=false;nowEl.textContent=D.typical.now.line}
+function slotOfReading(o){return String(o.p.h).padStart(2,"0")+":"+String(o.p.m-o.p.m%15).padStart(2,"0")}
+function basisOf(typ){if(!typ)return "all days";return typ.source==="weekday"?("on "+["Mondays","Tuesdays","Wednesdays","Thursdays","Fridays","Saturdays","Sundays"][["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].indexOf(typ.weekday)]):"all days"}
+function usualCategory(count,slot){if(!slot||slot.lo==null||slot.hi==null)return null;if(count<slot.lo)return "quieter than usual";if(count>slot.hi)return "busier than usual";return "about usual"}
+function roundHalfUp(v){return Math.floor(v+0.5)}
+function typicalNotes(obs){
+ const title=$("#chartTitle"),bar=$("#vsBar"),legend=$("#vsLegend"),noteEl=$("#chartNote"),foot=$("#vsFoot"),pill=$("#vsPill"),meta=$("#vsMeta");
+ const day=range==="day";
+ if(bar) bar.hidden=!day; if(legend) legend.hidden=!day; if(foot){foot.hidden=!day; foot.textContent=""}
+ if(title) title.textContent=day?dayTitle():"Observed counts over time";
+ if(!day){if(noteEl) noteEl.textContent=CHART_NOTE; return}
+ const ok=(obs||[]).filter(o=>o.s==="ok"),typ=typicalOf(sel),latest=ok.length?ok[ok.length-1]:null;
+ const basis=basisOf(typ);
+ if(noteEl) noteEl.textContent=typ?`Historical median and middle 50% · ${basis} · Europe/Vienna`:"No typical curve yet.";
+ if(foot&&ok.length){
+  const low=ok.reduce((a,o)=>!a||o.c<a.c||(o.c===a.c&&o.d<a.d)?o:a,null);
+  const high=ok.reduce((a,o)=>!a||o.c>a.c||(o.c===a.c&&o.d<a.d)?o:a,null);
+  const hm=o=>fmt(o.d,{hour:"2-digit",minute:"2-digit"});
+  foot.textContent=`Lowest observed ${low.c} at ${hm(low)} | Highest observed ${high.c} at ${hm(high)} | ${ok.length} readings`;
+ }
+ if(!pill||!meta) return;
+ pill.hidden=true; meta.textContent="";
+ if(!typ||!latest) return;
+ const slot=(typ.slots||[]).find(s=>s.slot===slotOfReading(latest));
+ if(!slot) return;
+ const shown=roundHalfUp(slot.median),cat=usualCategory(latest.c,slot);
+ if(cat){pill.hidden=false;pill.textContent=cat}
+ meta.textContent=`Historical median: ${shown} · Updated ${fmt(latest.d,{hour:"2-digit",minute:"2-digit"})}`;
 }
+function dayTitle(){const today=parts(new Date()).date;if(sel===today)return "Today vs usual";
+ const d=new Date(sel+"T12:00:00Z");return fmt(d,{weekday:"short",day:"numeric",month:"short"}).replace(",","")+" vs usual"}
 function typicalRuns(slots){
  const runs=[]; let cur=[];
  const flush=()=>{if(cur.length>=2) runs.push(cur); cur=[]};
  slots.forEach(s=>{if(cur.length&&!adjacent(cur[cur.length-1].slot,s.slot)) flush(); cur.push(s)});
  flush(); return runs;
 }
-function typicalLayer(typ,x,y){
+function typicalLayer(typ,x,y,latestMin){
  if(!typ||!typ.slots||!typ.slots.length) return "";
  let g="";
  typicalRuns(typ.slots).forEach(run=>{
   let band=[];
   const flushBand=()=>{
    if(band.length>=2){const top=band.map(s=>`${x(minsOf(s.slot))} ${y(s.hi)}`).join(" L"),bot=band.slice().reverse().map(s=>`${x(minsOf(s.slot))} ${y(s.lo)}`).join(" L");
-    g+=`<path d="M${top} L${bot} Z" fill="rgba(90,112,132,.28)" stroke="none"/>`}
+    g+=`<path d="M${top} L${bot} Z" fill="rgba(120,144,168,.28)" stroke="none"/>`}
    band=[]};
   run.forEach(s=>{if(s.lo==null||s.hi==null){flushBand();return} band.push(s)});
   flushBand();
-  const d=run.map((s,i)=>`${i?"L":"M"}${x(minsOf(s.slot))} ${y(s.mean)}`).join(" ");
-  g+=`<path d="${d}" fill="none" stroke="#5c6770" stroke-width="1.25"/>`;
+  const d=run.map((s,i)=>`${i?"L":"M"}${x(minsOf(s.slot))} ${y(s.median)}`).join(" ");
+  g+=`<path d="${d}" fill="none" stroke="#6b7380" stroke-width="1.6" stroke-dasharray="6 5"/>`;
+  if(latestMin!=null){
+   const after=run.filter(s=>minsOf(s.slot)>latestMin);
+   if(after.length){const s=after[Math.min(1,after.length-1)];
+    g+=`<text x="${x(minsOf(s.slot))+4}" y="${y(s.median)-8}" fill="#6b7380">Historical pattern</text>`}
+  }
  });
  return g;
 }
 function chart(obs){const el=$("#chart"),W=1000,H=320,P={l:40,r:14,t:18,b:30};
- typicalNotes();
+ typicalNotes(obs);
  if(!obs.length){el.innerHTML='<p class="note">No readings in this range.</p>';return}
- if(range==="day"){dayChart(el,obs,W,H,P);return}
+ if(range==="day"){dayChart(el,obs,W,H);return}
  const ok=obs.filter(o=>o.s==="ok"),t0=+obs[0].d,t1=Math.max(+obs[obs.length-1].d,t0+36e5),ym=Math.max(10,...ok.map(o=>o.c))*1.15;
  const x=t=>P.l+(t-t0)/(t1-t0)*(W-P.l-P.r),y=v=>H-P.b-v/ym*(H-P.t-P.b);let g="";
  for(let v=0;v<=ym;v+=ym>60?20:ym>30?10:5)g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eee"/><text x="${P.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
@@ -88,19 +110,30 @@ function chart(obs){const el=$("#chart"),W=1000,H=320,P={l:40,r:14,t:18,b:30};
  ok.forEach(o=>g+=`<circle cx="${x(+o.d)}" cy="${y(o.c)}" r="${ok.length>300?1.8:3.2}" fill="#2f6fb3"><title>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}: ${o.c}</title></circle>`);
  obs.filter(o=>o.s!=="ok").forEach(o=>g+=`<text x="${x(+o.d)}" y="${H-P.b-4}" text-anchor="middle" fill="#b3261e" style="fill:#b3261e">×<title>${esc(o.s)} ${fmt(o.d,{hour:"2-digit",minute:"2-digit"})}</title></text>`);
  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Observed counts">${g}</svg>`}
-function dayChart(el,obs,W,H,P){
- const typ=typicalOf(sel),ok=obs.filter(o=>o.s==="ok"),X0=6*60,X1=22*60+45;
- const typMax=typ?Math.max(0,...typ.slots.map(s=>Math.max(s.mean,s.hi==null?-Infinity:s.hi))):0;
- const ym=Math.max(10,...ok.map(o=>o.c),typMax)*1.15;
- const x=m=>P.l+(m-X0)/(X1-X0)*(W-P.l-P.r),y=v=>H-P.b-v/ym*(H-P.t-P.b);let g="";
- for(let v=0;v<=ym;v+=ym>60?20:ym>30?10:5)g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eee"/><text x="${P.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
- for(let h=6;h<=22;h+=2)g+=`<line x1="${x(h*60)}" x2="${x(h*60)}" y1="${P.t}" y2="${H-P.b}" stroke="#f1f1f1"/><text x="${x(h*60)}" y="${H-10}" text-anchor="middle">${String(h).padStart(2,"0")}:00</text>`;
- g+=typicalLayer(typ,x,y);
+function dayChart(el,obs,W,H){
+ const P={l:44,r:18,t:22,b:32},X0=6*60,X1=23*60;
+ const typ=typicalOf(sel),ok=obs.filter(o=>o.s==="ok");
+ const peak=Math.max(0,...ok.map(o=>o.c),...(typ?typ.slots.map(s=>Math.max(s.median,s.hi==null?0:s.hi)):[]));
+ const ym=Math.max(50,Math.ceil(peak/10)*10);
+ const x=m=>P.l+(m-X0)/(X1-X0)*(W-P.l-P.r),y=v=>H-P.b-(v/ym)*(H-P.t-P.b);let g="";
+ for(let v=0;v<=ym;v+=10)g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eee"/><text x="${P.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+ for(let h=6;h<=22;h+=2)g+=`<line x1="${x(h*60)}" x2="${x(h*60)}" y1="${P.t}" y2="${H-P.b}" stroke="#f1f1f1"/><text x="${x(h*60)}" y="${H-8}" text-anchor="middle">${String(h).padStart(2,"0")}:00</text>`;
+ g+=`<text x="${x(23*60)}" y="${H-8}" text-anchor="end">23:00</text>`;
+ const latest=ok.length?ok[ok.length-1]:null;
+ const latestMin=latest?latest.p.h*60+latest.p.m:null;
+ const isToday=sel===parts(new Date()).date;
+ g+=typicalLayer(typ,x,y,isToday?latestMin:null);
  for(let i=1;i<ok.length;i++){const a=ok[i-1],b=ok[i],gap=(b.d-a.d)/6e4;if(gap>6*60)continue;
-  g+=`<line x1="${x(a.p.h*60+a.p.m)}" y1="${y(a.c)}" x2="${x(b.p.h*60+b.p.m)}" y2="${y(b.c)}" stroke="#7aa3d4" stroke-width="1.3" ${gap>25?'stroke-dasharray="4 4"':""}/>`}
- ok.forEach(o=>g+=`<circle cx="${x(o.p.h*60+o.p.m)}" cy="${y(o.c)}" r="3.2" fill="#2f6fb3"><title>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}: ${o.c}</title></circle>`);
+  g+=`<line x1="${x(a.p.h*60+a.p.m)}" y1="${y(a.c)}" x2="${x(b.p.h*60+b.p.m)}" y2="${y(b.c)}" stroke="#2f6fb3" stroke-width="2" ${gap>25?'stroke-dasharray="4 4"':""}/>`}
+ ok.forEach(o=>g+=`<circle cx="${x(o.p.h*60+o.p.m)}" cy="${y(o.c)}" r="3.4" fill="#2f6fb3"><title>${fmt(o.d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}: ${o.c}</title></circle>`);
  obs.filter(o=>o.s!=="ok").forEach(o=>g+=`<text x="${x(o.p.h*60+o.p.m)}" y="${H-P.b-4}" text-anchor="middle" fill="#b3261e" style="fill:#b3261e">×<title>${esc(o.s)} ${fmt(o.d,{hour:"2-digit",minute:"2-digit"})}</title></text>`);
- el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Observed counts with typical weekday overlay">${g}</svg>`}
+ if(isToday&&latest){
+  const mx=latestMin,hh=fmt(latest.d,{hour:"2-digit",minute:"2-digit"});
+  g+=`<line x1="${x(mx)}" x2="${x(mx)}" y1="${P.t}" y2="${H-P.b}" stroke="#2f6fb3" stroke-dasharray="2 3" stroke-width="1.2"/>`;
+  g+=`<text x="${x(mx)}" y="${P.t-6}" text-anchor="middle" fill="#2f6fb3">Latest · ${hh}</text>`;
+  g+=`<g><rect x="${x(mx)+6}" y="${y(latest.c)-16}" width="28" height="18" rx="4" fill="#2f6fb3"/><text x="${x(mx)+20}" y="${y(latest.c)-3}" text-anchor="middle" fill="#fff">${latest.c}</text></g>`;
+ }
+ el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Today versus the usual pattern">${g}</svg>`}
 function compare(){const el=$("#compare"),ok=D.observations.filter(o=>o.s==="ok"),dates=[...new Set(ok.map(o=>o.p.date))].filter(d=>d<=sel).slice(-7);
  if(dates.length<2){el.innerHTML="";$("#compareNote").textContent="Needs readings from at least two dates.";return}
  const W=1000,H=280,P={l:40,r:110,t:10,b:28},ym=Math.max(10,...ok.map(o=>o.c))*1.15,x=m=>P.l+(m-360)/(1380-360)*(W-P.l-P.r),y=v=>H-P.b-v/ym*(H-P.t-P.b);
@@ -135,7 +168,7 @@ function table(obs){$("#tbl tbody").innerHTML=[...obs].reverse().map(o=>`<tr><td
 const FULL=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 function hhmmMins(s){const [h,m]=s.split(":").map(Number);return h*60+m}
 function slotsLeftNow(h,m){const minutes=h*60+m,open=6*60,close=22*60+45,start=minutes<open?open:minutes-(minutes%15);return start>close?0:Math.floor((close-start)/15)+1}
-function earliestNow(h,m){if(slotsLeftNow(h,m)<6)return null;const minutes=h*60+m,open=6*60,start=minutes<open?open:minutes-(minutes%15);return String(Math.floor(start/60)).padStart(2,"0")+":"+String(start%60).padStart(2,"0")}
+function earliestNow(h,m){const minutes=h*60+m,first=8*60,lastStart=18*60+30,start=minutes<first?first:minutes-(minutes%15);if(start>lastStart)return null;return String(Math.floor(start/60)).padStart(2,"0")+":"+String(start%60).padStart(2,"0")}
 function windowsOverlap(a,b){return Math.abs(hhmmMins(a.start)-hhmmMins(b.start))<90}
 function bestSentence(prefix,w,basis){return prefix+": "+w.start+"–"+w.end+", typically ~"+w.shown+" people"+(basis?" ("+basis+")":"")}
 function bestTimeBox(){const el=$("#bestTime");if(!el)return;
@@ -145,7 +178,7 @@ function bestTimeBox(){const el=$("#bestTime");if(!el)return;
  const tom=()=>{if(!tomInfo||!tomInfo.windows||!tomInfo.windows.length)return null;const w=tomInfo.windows[0];return {line:bestSentence("Tomorrow's quietest window",w,tomInfo.basis),confidence:tomInfo.basis.charAt(0).toUpperCase()+tomInfo.basis.slice(1)}};
  const earliest=earliestNow(p.h,p.m);
  if(!Object.keys(cat).length){el.innerHTML='<p class="fallback">No typical data yet</p>';return}
- if(earliest==null){const nxt=tom();el.innerHTML=`<h2>Best time today</h2><p class="fallback">Not enough time left today</p>`+(nxt?`<p class="detail">${esc(nxt.line)}</p><p class="note">${esc(nxt.confidence)}</p>`:"");return}
+ if(earliest==null){const nxt=tom();el.innerHTML=`<h2>Best time today</h2><p class="fallback">No window left today</p>`+(nxt?`<p class="detail">${esc(nxt.line)}</p><p class="note">${esc(nxt.confidence)}</p>`:"");return}
  if(!todayInfo||!todayInfo.windows||!todayInfo.windows.length){el.innerHTML='<p class="fallback">No typical data yet</p>';return}
  const eligible=todayInfo.windows.filter(w=>w.start>=earliest);
  if(!eligible.length){const nxt=tom();el.innerHTML='<p class="fallback">No typical data for the rest of today</p>'+(nxt?`<p class="detail">${esc(nxt.line)}</p><p class="note">${esc(nxt.confidence)}</p>`:"");return}

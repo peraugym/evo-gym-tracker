@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Typical curve: binning, all-days fallback, mean ± 2 SD band, and gaps."""
+"""Typical curve: binning, all-days fallback, median and middle 50%, and gaps."""
 from __future__ import annotations
 
 import statistics
@@ -38,16 +38,13 @@ class SlotBinning(unittest.TestCase):
 
 
 class Band(unittest.TestCase):
-    def test_mean_and_two_sd_clipped_at_zero(self):
+    def test_median_and_inclusive_quartiles_clipped_at_zero(self):
         center, lo, hi = typical._slot_band([10, 20, 30])
         self.assertEqual(center, 20)
-        self.assertEqual(lo, 0)   # 20 - 2*10
-        self.assertEqual(hi, 40)  # 20 + 2*10
-        wide = [1, 2, 30]
-        center, lo, hi = typical._slot_band(wide)
-        self.assertLess(center - typical.BAND_SD * statistics.stdev(wide), 0)
+        self.assertEqual((lo, hi), (15, 25))
+        center, lo, hi = typical._slot_band([0, 0, 0, 0])
+        self.assertEqual(center, 0)
         self.assertEqual(lo, 0)
-        self.assertGreater(hi, center)
 
     def test_band_needs_three_day_values(self):
         center, lo, hi = typical._slot_band([10, 30])
@@ -66,9 +63,9 @@ class Curve(unittest.TestCase):
         ]
         got = typical.curve_for(readings, datetime(2026, 11, 20, tzinfo=VIE).date(), 4)
         self.assertEqual(got["n_days"], 2)
-        self.assertEqual(got["label"], "Typical Friday (mean of 2 past Fridays)")
+        self.assertEqual(got["label"], "Typical Friday (median of 2 past Fridays)")
         slot = next(s for s in got["slots"] if s["slot"] == "18:00")
-        self.assertEqual(slot["mean"], 30)
+        self.assertEqual(slot["median"], 30)
         self.assertIsNone(slot["lo"])
         self.assertIsNone(slot["hi"])
 
@@ -81,7 +78,7 @@ class Curve(unittest.TestCase):
         ]
         got = typical.curve_for(readings, datetime(2026, 11, 20, tzinfo=VIE).date(), 4)
         slot = next(s for s in got["slots"] if s["slot"] == "10:00")
-        self.assertEqual(slot["mean"], 30)  # mean of the day values 20 and 40
+        self.assertEqual(slot["median"], 30)  # median of the day values 20 and 40
         self.assertEqual(slot["n"], 2)
 
     def test_band_appears_for_a_slot_with_three_days(self):
@@ -93,9 +90,9 @@ class Curve(unittest.TestCase):
         got = typical.curve_for(readings, datetime(2026, 11, 13, tzinfo=VIE).date(), 4)
         slot = next(s for s in got["slots"] if s["slot"] == "07:00")
         self.assertEqual(got["n_days"], 3)
-        self.assertEqual(slot["mean"], 20)
-        self.assertEqual(slot["lo"], 0)
-        self.assertEqual(slot["hi"], 40)
+        self.assertEqual(slot["median"], 20)
+        self.assertEqual(slot["lo"], 15)
+        self.assertEqual(slot["hi"], 25)
 
     def test_band_omitted_for_a_slot_with_fewer_than_three_days(self):
         readings = [
@@ -109,7 +106,7 @@ class Curve(unittest.TestCase):
         noon = next(s for s in got["slots"] if s["slot"] == "12:00")
         self.assertEqual(got["n_days"], 3)
         self.assertEqual(noon["n"], 2)
-        self.assertEqual(noon["mean"], 10)
+        self.assertEqual(noon["median"], 10)
         self.assertIsNone(noon["lo"])
         self.assertIsNone(noon["hi"])
 
@@ -123,7 +120,7 @@ class Curve(unittest.TestCase):
     def test_singular_label_for_one_past_day(self):
         readings = [at(13, 8, 0, 22)]
         got = typical.curve_for(readings, datetime(2026, 11, 20, tzinfo=VIE).date(), 4)
-        self.assertEqual(got["label"], "Typical Friday (mean of 1 past Friday)")
+        self.assertEqual(got["label"], "Typical Friday (median of 1 past Friday)")
 
     def test_falls_back_until_three_weekday_days(self):
         today = datetime(2026, 11, 20, tzinfo=VIE).date()
@@ -131,37 +128,38 @@ class Curve(unittest.TestCase):
         shown = typical.display_curves(sparse, today)["Friday"]
         self.assertEqual(shown["source"], "all")
         self.assertEqual(shown["weekday_days"], 1)
-        self.assertEqual(shown["label"], "Typical day (all days, mean of 2 days)")
-        # Three Fridays switch back, and a Thursday no longer moves the Friday mean.
-        fridays = [
+        self.assertEqual(shown["label"], "Typical day (all days, median of 2 days)")
+        # Three Fridays is still all-days. Four Fridays switch, and a Thursday no longer moves the Friday median.
+        three = [
             at(23, 18, 0, 10, month=10),
             at(30, 18, 0, 20, month=10),
             at(6, 18, 0, 30),
-            at(12, 18, 0, 100),  # Thursday
         ]
+        self.assertEqual(typical.display_curves(three, today)["Friday"]["source"], "all")
+        fridays = three + [at(16, 18, 0, 40, month=10), at(12, 18, 0, 100)]
         chosen = typical.display_curves(fridays, today)["Friday"]
         self.assertEqual(chosen["source"], "weekday")
-        self.assertEqual(chosen["weekday_days"], 3)
+        self.assertEqual(chosen["weekday_days"], 4)
         slot = next(s for s in chosen["slots"] if s["slot"] == "18:00")
-        self.assertEqual(slot["mean"], 20)
-        self.assertEqual(chosen["label"], "Typical Friday (mean of 3 past Fridays)")
+        self.assertEqual(slot["median"], 25)
+        self.assertEqual(chosen["label"], "Typical Friday (median of 4 past Fridays)")
 
 
 class Gaps(unittest.TestCase):
     def test_interpolates_up_to_two_slots_and_breaks_longer_gaps(self):
         short = typical.interpolate_slots([
-            {"slot": "10:00", "n": 3, "mean": 10, "lo": 4, "hi": 16},
-            {"slot": "10:45", "n": 3, "mean": 40, "lo": 30, "hi": 50},
+            {"slot": "10:00", "n": 3, "median": 10, "lo": 4, "hi": 16},
+            {"slot": "10:45", "n": 3, "median": 40, "lo": 30, "hi": 50},
         ])
         labels = [s["slot"] for s in short]
         self.assertEqual(labels, ["10:00", "10:15", "10:30", "10:45"])
         filled = next(s for s in short if s["slot"] == "10:15")
         self.assertTrue(filled["interpolated"])
-        self.assertEqual(filled["mean"], 20)
+        self.assertEqual(filled["median"], 20)
         self.assertEqual(len(typical.drawable_runs(short)), 1)
         long = typical.interpolate_slots([
-            {"slot": "10:00", "n": 1, "mean": 10, "lo": None, "hi": None},
-            {"slot": "11:00", "n": 1, "mean": 40, "lo": None, "hi": None},
+            {"slot": "10:00", "n": 1, "median": 10, "lo": None, "hi": None},
+            {"slot": "11:00", "n": 1, "median": 40, "lo": None, "hi": None},
         ])
         self.assertEqual([s["slot"] for s in long], ["10:00", "11:00"])
         self.assertEqual(typical.drawable_runs(long), [])
@@ -177,22 +175,24 @@ class Gaps(unittest.TestCase):
 
 class CompareNow(unittest.TestCase):
     def test_inside_band_is_about_usual_and_outside_is_way(self):
-        # 18, 20, 22 → mean 20, sd 2, band 16–24.
+        # 10, 20, 30 → median 20, inclusive quartiles 15 and 25. Edges count as about usual.
         readings = [
-            at(23, 18, 0, 18, month=10),
+            at(23, 18, 0, 10, month=10),
             at(30, 18, 0, 20, month=10),
-            at(6, 18, 0, 22),
+            at(6, 18, 0, 30),
         ]
         today = datetime(2026, 11, 20, tzinfo=VIE).date()
         curve = typical.curve_for(readings, today, 4)
-        inside = typical.compare_now(curve, at(20, 18, 1, 21), today)
-        above = typical.compare_now(curve, at(20, 18, 1, 25), today)
-        below = typical.compare_now(curve, at(20, 18, 1, 15), today)
+        inside = typical.compare_now(curve, at(20, 18, 1, 25), today)
+        above = typical.compare_now(curve, at(20, 18, 1, 26), today)
+        below = typical.compare_now(curve, at(20, 18, 1, 14), today)
+        edge = typical.compare_now(curve, at(20, 18, 1, 15), today)
         self.assertEqual(inside["typical"], 20)
         self.assertEqual(inside["category"], "about usual")
-        self.assertEqual(inside["line"], "Right now: 21 vs typical 20 (about usual)")
-        self.assertEqual(above["category"], "way busier than usual")
-        self.assertEqual(below["category"], "way quieter than usual")
+        self.assertEqual(edge["category"], "about usual")
+        self.assertEqual(above["category"], "busier than usual")
+        self.assertEqual(below["category"], "quieter than usual")
+        self.assertNotIn("way ", above["line"])
 
     def test_without_a_band_compares_with_the_mean(self):
         readings = [at(6, 18, 0, 10), at(13, 18, 0, 30)]
@@ -201,8 +201,8 @@ class CompareNow(unittest.TestCase):
         got = typical.compare_now(curve, at(20, 18, 1, 16), today)
         self.assertEqual(got["slot"], "18:00")
         self.assertEqual(got["typical"], 20)
-        self.assertEqual(got["category"], "quieter than usual")
-        self.assertEqual(got["line"], "Right now: 16 vs typical 20 (quieter than usual)")
+        self.assertIsNone(got["category"])
+        self.assertEqual(got["line"], "Right now: 16 vs typical 20")
 
     def test_hidden_when_latest_is_not_today_or_the_gap_is_long(self):
         readings = [at(13, 18, 0, 20)]
@@ -226,7 +226,7 @@ class PayloadAndBuild(unittest.TestCase):
         self.assertEqual(got["exclude_date"], "2026-11-20")
         self.assertEqual(got["weekdays"]["Friday"]["source"], "all")
         self.assertEqual(got["weekdays"]["Monday"]["label"], got["weekdays"]["Friday"]["label"])
-        self.assertEqual(got["now"]["line"], "Right now: 16 vs typical 20 (quieter than usual)")
+        self.assertEqual(got["now"]["line"], "Right now: 16 vs typical 20")
 
     def test_dashboard_build_embeds_typical_without_changing_rows(self):
         with tempfile.TemporaryDirectory() as site:
@@ -236,13 +236,13 @@ class PayloadAndBuild(unittest.TestCase):
         self.assertEqual(data["typical"]["exclude_date"], "2026-11-20")
         friday = data["typical"]["weekdays"]["Friday"]
         self.assertIn(friday["source"], ("weekday", "all"))
-        self.assertIn("mean", friday["label"])
+        self.assertIn("median", friday["label"])
         if friday["source"] == "weekday":
             self.assertGreaterEqual(friday["weekday_days"], 3)
             self.assertTrue(friday["label"].startswith("Typical Friday"))
         else:
             self.assertLess(friday["weekday_days"], 3)
-            self.assertTrue(friday["label"].startswith("Typical day (all days, mean of "))
+            self.assertTrue(friday["label"].startswith("Typical day (all days, median of "))
         self.assertTrue(friday["slots"])
         self.assertNotIn("note", data["observations"][0])
         self.assertEqual(set(data["observations"][0]), {"t", "c", "s"})
@@ -252,8 +252,10 @@ class PayloadAndBuild(unittest.TestCase):
         page = open("dashboard/index.html").read()
         self.assertNotIn("esc(typ.label)", script)
         self.assertNotIn("s.p75", script)
-        self.assertIn("s.mean", script)
-        self.assertIn('id="typicalLegend"', page)
+        self.assertIn("s.median", script)
+        self.assertNotIn("way busier", script)
+        self.assertIn('id="vsLegend"', page)
+        self.assertIn("Today vs usual", page)
 
 
 if __name__ == "__main__":
