@@ -62,8 +62,18 @@ def ok_readings(obs: list[dict]) -> list[hero_mod.Reading]:
     return readings
 
 
-def hero_payload(obs: list[dict]) -> dict | None:
-    return hero_mod.summarize(ok_readings(obs))
+def hero_payload(obs: list[dict], now: datetime | None = None) -> dict | None:
+    readings = ok_readings(obs)
+    summary = hero_mod.summarize(readings)
+    if not summary or not readings:
+        return summary
+    latest = max(readings, key=lambda reading: reading.when)
+    local = (now or latest.when).astimezone(VIE)
+    curves = typical_mod.display_curves(readings, local.date())
+    summary["usual"] = typical_mod.usual_for(
+        latest, curves.get(typical_mod.WEEKDAY_NAMES[latest.when.weekday()])
+    )
+    return summary
 
 
 def typical_payload(obs: list[dict], now: datetime) -> dict:
@@ -93,7 +103,7 @@ def build(now: datetime | None = None, src: str = SRC, site: str | None = None) 
             "close_hour": 23,
         },
         "source": "Browser readings of the public page visits.evofitness.at (rendered page, not an official EVO feed)",
-        "hero": hero_payload(obs),
+        "hero": hero_payload(obs, now),
         "typical": typical_payload(obs, now),
         "best_time": best_time_payload(obs, now),
         "observations": [{"t": o["t"], "c": o["c"], "s": o["s"]} for o in obs],

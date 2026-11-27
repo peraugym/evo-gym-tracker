@@ -3,10 +3,10 @@
 
 Same-weekday history is used once that weekday has at least WEEKDAY_MIN_DAYS
 past days. Otherwise the curve uses every past day (today excluded). Each
-slot's centre is the mean of that slot's per-day values, and the shaded band
-is mean ± BAND_SD standard deviations, clipped at 0, once the slot has
-BAND_MIN_DAYS values. Short holes of up to MAX_GAP_SLOTS are interpolated;
-longer holes stay broken. Collection and the CSV schema are not involved.
+slot's centre is the median of that slot's per-day values. The band is the
+25th–75th percentile, clipped at 0, once the slot has BAND_MIN_DAYS values.
+Short holes of up to MAX_GAP_SLOTS are interpolated; longer holes stay broken.
+Collection and the CSV schema are not involved.
 """
 from __future__ import annotations
 
@@ -23,10 +23,11 @@ CLOSE_SLOT = time(22, 45)
 SLOT_MINUTES = 15
 # A slot is shaded once this many past days have a value there.
 BAND_MIN_DAYS = 3
-# Half-width of the shaded band, in standard deviations.
-BAND_SD = 2
-# One sparse weekday is not enough; wait for this many past days.
-WEEKDAY_MIN_DAYS = 3
+# Same-weekday history only after this many past days; otherwise all days.
+WEEKDAY_MIN_DAYS = 4
+# Best-time windows must start at or after this and end by the later bound.
+VISIT_FROM = time(8, 0)
+VISIT_UNTIL = time(20, 0)
 # Missing quarter-hours that may be bridged. 2 slots = up to 30 minutes.
 MAX_GAP_SLOTS = 2
 # Quietest stretch: six consecutive slots, 90 minutes.
@@ -83,15 +84,15 @@ def _day_slot_values(readings: list[hero.Reading], exclude: date, weekday: int |
 
 
 def _slot_band(values: list[float]) -> tuple[float, float | None, float | None]:
-    """Mean, and mean ± BAND_SD standard deviations clipped at 0.
+    """Median, and the 25th–75th percentile clipped at 0.
 
-    The band needs BAND_MIN_DAYS values. Fewer than that returns the mean only.
+    The band needs BAND_MIN_DAYS values. Fewer than that returns the median only.
     """
-    center = float(statistics.mean(values))
+    center = float(statistics.median(values))
     if len(values) < BAND_MIN_DAYS:
         return center, None, None
-    spread = float(statistics.stdev(values)) * BAND_SD
-    return center, max(0.0, center - spread), max(0.0, center + spread)
+    q1, _q2, q3 = statistics.quantiles(values, n=4, method="inclusive")
+    return center, max(0.0, float(q1)), max(0.0, float(q3))
 
 
 def _slot_stats(by_date: dict[date, dict[time, list[int]]]) -> list[dict]:
@@ -109,7 +110,7 @@ def _slot_stats(by_date: dict[date, dict[time, list[int]]]) -> list[dict]:
         out.append({
             "slot": slot_label(hhmm),
             "n": len(values),
-            "mean": center,
+            "median": center,
             "lo": lo,
             "hi": hi,
         })
@@ -119,12 +120,12 @@ def _slot_stats(by_date: dict[date, dict[time, list[int]]]) -> list[dict]:
 def label_for(weekday: int, n_days: int) -> str:
     name = WEEKDAY_NAMES[weekday]
     plural = WEEKDAY_PLURAL[weekday] if n_days != 1 else name
-    return f"Typical {name} (mean of {n_days} past {plural})"
+    return f"Typical {name} (median of {n_days} past {plural})"
 
 
 def all_days_label(n_days: int) -> str:
     unit = "day" if n_days == 1 else "days"
-    return f"Typical day (all days, mean of {n_days} {unit})"
+    return f"Typical day (all days, median of {n_days} {unit})"
 
 
 def _minutes(hhmm: time) -> int:
@@ -159,7 +160,7 @@ def interpolate_slots(rows: list[dict], max_gap: int = MAX_GAP_SLOTS) -> list[di
             filled = {
                 "slot": slot,
                 "n": 0,
-                "mean": left["mean"] * (1 - weight) + right["mean"] * weight,
+                "median": left["median"] * (1 - weight) + right["median"] * weight,
                 "lo": None,
                 "hi": None,
                 "interpolated": True,
@@ -266,33 +267,64 @@ def compare_now(curve: dict | None, latest: hero.Reading, today: date) -> dict |
     match = next((s for s in curve["slots"] if s["slot"] == label), None)
     if match is None:
         return None
-    typical = match["mean"]
+    typical = match["median"]
     shown = hero.round_half_up(typical)
-    category = band_category(latest.count, typical, match.get("lo"), match.get("hi"))
+    category = band_category(latest.count, match.get("lo"), match.get("hi"))
+    detail = f" ({category})" if category else ""
     return {
         "count": latest.count,
         "slot": label,
         "typical": shown,
-        "typical_mean": typical,
+        "typical_median": typical,
         "lo": match.get("lo"),
         "hi": match.get("hi"),
         "category": category,
-        "line": f"Right now: {latest.count} vs typical {shown} ({category})",
+        "basis": basis_words(curve),
+        "line": f"Right now: {latest.count} vs typical {shown}{detail}",
     }
 
 
-def band_category(count: float, mean: float, lo: float | None, hi: float | None) -> str:
-    """Place a count against the shaded band, or against the mean when there is no band.
+def band_category(count: float, lo: float | None, hi: float | None) -> str | None:
+    """Shared label for the hero and the day chart.
 
-    Above the band is way busier; below it is way quieter; inside it is about usual.
+    Below the band is quieter, above it is busier, and the edges count as about usual.
+    No band means no category.
     """
-    if lo is not None and hi is not None:
-        if count > hi:
-            return "way busier than usual"
-        if count < lo:
-            return "way quieter than usual"
-        return "about usual"
-    return hero.category(int(count), mean)
+    return hero.usual_label(count, lo, hi)
+
+
+def basis_words(curve: dict) -> str:
+    """'on Fridays' for a same-weekday curve, otherwise 'all days'."""
+    if curve.get("source") == "weekday":
+        return "on " + WEEKDAY_PLURAL[WEEKDAY_NAMES.index(curve["weekday"])]
+    return "all days"
+
+
+def usual_for(latest: hero.Reading, curve: dict | None) -> dict | None:
+    """Hero line for the latest reading's 15-minute slot. None when that slot has no history."""
+    if curve is None:
+        return None
+    slot = slot_of(latest.when)
+    if slot is None:
+        return None
+    label = slot_label(slot)
+    match = next((row for row in curve["slots"] if row["slot"] == label), None)
+    if match is None or match.get("median") is None:
+        return None
+    shown = hero.round_half_up(match["median"])
+    basis = basis_words(curve)
+    category = band_category(latest.count, match.get("lo"), match.get("hi"))
+    return {
+        "n": shown,
+        "median": match["median"],
+        "slot": label,
+        "scope": "weekday" if curve.get("source") == "weekday" else "all",
+        "scope_label": basis,
+        "category": category,
+        "lo": match.get("lo"),
+        "hi": match.get("hi"),
+        "line": hero.usual_line(shown, basis, category),
+    }
 
 
 def payload(readings: list[hero.Reading], today: date) -> dict:
@@ -329,28 +361,34 @@ def basis_phrase(curve: dict) -> str:
 
 
 def candidate_windows(slots: list[dict]) -> list[dict]:
-    """Every 90-minute run of 6 present slots, quietest mean first."""
-    by_label = {row["slot"]: row["mean"] for row in slots}
+    """Every 90-minute run inside VISIT_FROM–VISIT_UNTIL, quietest average median first."""
+    by_label = {row["slot"]: row["median"] for row in slots}
     times = slot_times()
+    first = _minutes(VISIT_FROM)
+    last = _minutes(VISIT_UNTIL)
     found = []
     for i in range(len(times) - WINDOW_SLOTS + 1):
         chunk = times[i:i + WINDOW_SLOTS]
-        means = []
+        start_m = _minutes(chunk[0])
+        end_m = start_m + WINDOW_SLOTS * SLOT_MINUTES
+        if start_m < first or end_m > last:
+            continue
+        medians = []
         missing = False
         for moment in chunk:
             key = slot_label(moment)
             if key not in by_label:
                 missing = True
                 break
-            means.append(by_label[key])
+            medians.append(by_label[key])
         if missing:
             continue
-        mean = float(statistics.mean(means))
+        score = float(statistics.mean(medians))
         found.append({
             "start": slot_label(chunk[0]),
             "end": _end_label(chunk[0]),
-            "mean": mean,
-            "shown": hero.round_half_up(mean),
+            "mean": score,
+            "shown": hero.round_half_up(score),
         })
     found.sort(key=lambda item: (item["mean"], item["start"]))
     return found
@@ -373,13 +411,14 @@ def slots_left(local: datetime) -> int:
 
 
 def earliest_start(local: datetime) -> str | None:
-    """First slot that is not already past. None when fewer than 6 slots remain."""
-    if slots_left(local) < WINDOW_SLOTS:
-        return None
+    """First visit-window slot that has not already passed. None when none remain before 20:00."""
     local = local.astimezone(VIE) if local.tzinfo else local.replace(tzinfo=VIE)
     minutes = local.hour * 60 + local.minute
-    open_m = OPEN.hour * 60 + OPEN.minute
-    start = open_m if minutes < open_m else minutes - (minutes % SLOT_MINUTES)
+    first = _minutes(VISIT_FROM)
+    last_start = _minutes(VISIT_UNTIL) - WINDOW_SLOTS * SLOT_MINUTES
+    start = first if minutes < first else minutes - (minutes % SLOT_MINUTES)
+    if start > last_start:
+        return None
     return f"{start // 60:02d}:{start % 60:02d}"
 
 
@@ -435,7 +474,7 @@ def recommend(catalog: dict, now: datetime) -> dict:
     earliest = earliest_start(local)
     today_info = catalog.get(WEEKDAY_NAMES[today.weekday()])
     if earliest is None:
-        result = {"status": "evening", "message": "Not enough time left today"}
+        result = {"status": "evening", "message": "No window left today"}
         nxt = _tomorrow_pick(catalog, tomorrow)
         if nxt:
             result["tomorrow"] = nxt

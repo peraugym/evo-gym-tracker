@@ -12,8 +12,8 @@ import typical
 VIE = ZoneInfo("Europe/Vienna")
 
 
-def slot(label: str, mean: float) -> dict:
-    return {"slot": label, "n": 3, "mean": mean, "lo": None, "hi": None}
+def slot(label: str, median: float) -> dict:
+    return {"slot": label, "n": 3, "median": median, "lo": None, "hi": None}
 
 
 def flat_day(value: float, start: str = "06:00", count: int = 12) -> list[dict]:
@@ -51,14 +51,11 @@ class Ranking(unittest.TestCase):
         self.assertNotIn("10:15", starts)
 
     def test_slots_left_through_close(self):
-        self.assertEqual(typical.slots_left(datetime(2026, 11, 21, 5, 30, tzinfo=VIE)), 68)
-        self.assertEqual(typical.earliest_start(datetime(2026, 11, 21, 5, 30, tzinfo=VIE)), "06:00")
-        self.assertEqual(typical.slots_left(datetime(2026, 11, 21, 9, 14, tzinfo=VIE)), 56)
+        self.assertEqual(typical.earliest_start(datetime(2026, 11, 21, 5, 30, tzinfo=VIE)), "08:00")
         self.assertEqual(typical.earliest_start(datetime(2026, 11, 21, 9, 14, tzinfo=VIE)), "09:00")
-        self.assertEqual(typical.slots_left(datetime(2026, 11, 21, 21, 30, tzinfo=VIE)), 6)
-        self.assertEqual(typical.slots_left(datetime(2026, 11, 21, 21, 45, tzinfo=VIE)), 5)
-        self.assertIsNone(typical.earliest_start(datetime(2026, 11, 21, 21, 45, tzinfo=VIE)))
-        self.assertEqual(typical.slots_left(datetime(2026, 11, 21, 23, 10, tzinfo=VIE)), 0)
+        self.assertEqual(typical.earliest_start(datetime(2026, 11, 21, 18, 30, tzinfo=VIE)), "18:30")
+        self.assertIsNone(typical.earliest_start(datetime(2026, 11, 21, 18, 45, tzinfo=VIE)))
+        self.assertIsNone(typical.earliest_start(datetime(2026, 11, 21, 21, 30, tzinfo=VIE)))
 
 
 class Recommendation(unittest.TestCase):
@@ -108,11 +105,13 @@ class Recommendation(unittest.TestCase):
         catalog = self._catalog()
         got = typical.recommend(catalog, datetime(2026, 11, 21, 22, 0, tzinfo=VIE))
         self.assertEqual(got["status"], "evening")
-        self.assertEqual(got["message"], "Not enough time left today")
+        self.assertEqual(got["message"], "No window left today")
         self.assertEqual(
             got["tomorrow"]["line"],
-            "Tomorrow's quietest window: 06:00–07:30, typically ~7 people (based on Sundays, 3 days)",
+            "Tomorrow's quietest window: 08:00–09:30, typically ~7 people (based on Sundays, 3 days)",
         )
+        self.assertTrue(all(item["start"] >= "08:00" and item["end"] <= "20:00" for item in catalog["Saturday"]["windows"]))
+        self.assertTrue(all(item["start"] >= "08:00" and item["end"] <= "20:00" for item in catalog["Sunday"]["windows"]))
 
     def test_no_data(self):
         got = typical.recommend({}, datetime(2026, 11, 21, 10, 0, tzinfo=VIE))
@@ -123,12 +122,13 @@ class Recommendation(unittest.TestCase):
         # Three past Saturdays: a busy morning block and a quiet afternoon block.
         # A loud Monday must not change the Saturday afternoon mean.
         readings = []
-        for day in (7, 14, 21):
+        for day in (31, 7, 14, 21):
             for step in range(6):
                 morning = 8 * 60 + step * 15
                 afternoon = 15 * 60 + step * 15
-                readings.append(hero.Reading(datetime(2026, 11, day, morning // 60, morning % 60, tzinfo=VIE), 40))
-                readings.append(hero.Reading(datetime(2026, 11, day, afternoon // 60, afternoon % 60, tzinfo=VIE), 4))
+                month = 10 if day == 31 else 11
+                readings.append(hero.Reading(datetime(2026, month, day, morning // 60, morning % 60, tzinfo=VIE), 40))
+                readings.append(hero.Reading(datetime(2026, month, day, afternoon // 60, afternoon % 60, tzinfo=VIE), 4))
         readings.append(hero.Reading(datetime(2026, 11, 16, 15, 0, tzinfo=VIE), 80))
         today = datetime(2026, 11, 28, 9, 0, tzinfo=VIE)  # Saturday
         curves = typical.display_curves(readings, today.date())
@@ -137,7 +137,7 @@ class Recommendation(unittest.TestCase):
         self.assertEqual(got["source"], "weekday")
         self.assertEqual(got["start"], "15:00")
         self.assertEqual(got["end"], "16:30")
-        self.assertIn("based on Saturdays, 3 days", got["line"])
+        self.assertIn("based on Saturdays, 4 days", got["line"])
 
 
 class Build(unittest.TestCase):

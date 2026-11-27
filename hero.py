@@ -77,6 +77,24 @@ def round_half_up(value: float) -> int:
     return int(math.floor(value + 0.5))
 
 
+def usual_label(count: float, lo: float | None, hi: float | None) -> str | None:
+    """Shared with the day chart. Edges of the band count as about usual. No band, no label."""
+    if lo is None or hi is None:
+        return None
+    if count < lo:
+        return "quieter than usual"
+    if count > hi:
+        return "busier than usual"
+    return "about usual"
+
+
+def usual_line(shown: int, basis: str, category: str | None) -> str:
+    """basis is 'on Fridays' or 'all days'."""
+    if category:
+        return f"Usually ~{shown} at this hour · {basis} · {category}"
+    return f"Usually ~{shown} at this hour · {basis}"
+
+
 def category(count: int, typical: float) -> str:
     delta = count - typical
     distance = abs(delta)
@@ -137,12 +155,11 @@ def summarize(readings: list[Reading]) -> dict | None:
     ordered = sorted(readings, key=lambda r: r.when)
     latest = ordered[-1]
     previous = ordered[-2] if len(ordered) > 1 else None
-    usual = typical_for(ordered[:-1], latest)
     return {
         "count": latest.count,
         "band": load_band(latest.count),
         "trend": trend(latest.count, None if previous is None else previous.count),
         "time_vienna": latest.when.isoformat(),
         "time_label": f"{latest.when.strftime('%a')} {latest.when.day} {latest.when.strftime('%b')}, {latest.when:%H:%M %Z}",
-        "usual": usual,
+        "usual": None,
     }
